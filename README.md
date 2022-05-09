@@ -27,3 +27,12 @@ Input variables (based on physicochemical tests):
 11 - alcohol
 Output variable (based on sensory data):
 12 - quality (score between 0 and 10)
+
+## Transformation of data
+
+### Normalization
+As a first step before the training of the model, some attributes were found to have a greater range than others, which may generate a bias on the model for the greater numbers; to solve this problem, a normalization of the values was done.
+### Attribute independence analysis
+(!!!) WE NEED TO EVALUATE THE INDEPENDENCE BETWEEN ATTRIBUTES
+### Dimension reduction
+(!!!) LETS EVALUATE WHICH ATTRIBUTES ARE RELEVANT FOR THE CLASSIFICATION
