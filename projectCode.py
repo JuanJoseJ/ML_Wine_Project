@@ -1,19 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
-from modules.dataTransform import normalize, empirical_cov, plotInitialData, logpdf_GAU_ND, vrow, vcol, plotEstimDensityForRow, plotEstimDensityAllRows
+from modules.dataTransform import normalize, vrow, vcol
 from modules.dataLoad import load
-
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, normal_dist_evaluation
+from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData
 
 def main():
     attrs, labels = load('./Train.txt')
     #plotInitialData(attrs, labels)
-    #attrs = normalize(attrs)
+    attrs = normalize(attrs)
 
-    firstAttr = attrs[1, :]
-    firstAttr = vrow(firstAttr)
-    plotEstimDensityForRow(firstAttr)
-    plotEstimDensityAllRows(attrs)
+    # firstAttr = attrs[1, :]
+    # firstAttr = vrow(firstAttr)
+    # plotEstimDensityForRow(firstAttr)
+    # plotEstimDensityAllRows(attrs)
+    
+    normal_dist_evaluation(attrs, True)
 
     # cov, mu = empirical_cov(firstAttr)
 

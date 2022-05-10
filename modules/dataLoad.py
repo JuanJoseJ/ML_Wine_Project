@@ -1,6 +1,10 @@
 import numpy as np
 from .dataTransform import vcol
 
+'''
+This file contains all the functions used to load a set of data.
+'''
+
 def load(address):
     '''
     Load the dataset into a matrix with dimension MxN where M = attributes and N = different samples
