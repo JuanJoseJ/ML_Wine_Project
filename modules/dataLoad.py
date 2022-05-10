@@ -17,4 +17,4 @@ def load(address):
             label = line.split(',')[-1].strip()
             dataList.append(attrs)
             labelList.append(label)
-    return np.hstack(dataList), np.array(labelList)
+    return np.hstack(dataList), np.array(labelList).astype(int)
