@@ -1,9 +1,10 @@
+from cProfile import label
 import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol
 from modules.dataLoad import load
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, normal_dist_evaluation
-from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient
+from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
 
 def main():
     attrs, labels = load('./Train.txt')
@@ -14,8 +15,6 @@ def main():
     # firstAttr = vrow(firstAttr)
     # plotEstimDensityForRow(firstAttr)
     # plotEstimDensityAllRows(attrs)
-    
-    normal_dist_evaluation(attrs, True)
 
     # cov, mu = empirical_cov(firstAttr)
 
@@ -27,8 +26,8 @@ def main():
 
     #cov,mu = empirical_cov(attrs, True)
 
-
-
+    pcc0, pcc1 = pearson_correlation_coefficient(attrs, labels);
+    plotCorrelationHeatMap(pcc0)
 if __name__ == '__main__':
     main()
 

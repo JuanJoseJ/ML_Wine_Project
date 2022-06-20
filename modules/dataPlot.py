@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib import collections  as mc
 import numpy as np
 from .dataEvaluation import logpdf_GAU_ND, empirical_cov
 from .dataTransform import vrow
@@ -88,3 +89,31 @@ def plotEstimDensityAllRows(D):
         XPlot = np.linspace(attr.min(), attr.max(), 1000)
         plt.plot(XPlot.ravel(), np.exp(logpdf_GAU_ND(vrow(XPlot), mu, cov)))
     plt.show()
+    
+def plotCorrelationHeatMap(matrix):
+    '''
+        Plots a heat map to analize the correlation between attributes
+    '''
+    
+    attrList = ["fixed acidity",
+        "volatile acidity",
+        "citric acid",
+        "residual sugar",
+        "chlorides",
+        "free sulfur dioxide",
+        "total sulfur dioxide",
+        "density",
+        "pH",
+        "sulphates",
+        "alcohol"]
+    # plt.figure()
+    fig, ax = plt.subplots()
+    heatmap = ax.pcolor(matrix)
+    plt.colorbar(heatmap)
+    ax.set_xticks(np.arange(len(attrList)), labels=attrList)
+    ax.set_yticks(np.arange(len(attrList)), labels=attrList)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
+
+    # plt.imshow(matrix, cmap='hot', interpolation='nearest')
+    plt.show()
+    return

@@ -1,3 +1,4 @@
+from math import sqrt
 import numpy as np
 from scipy import stats
 '''
@@ -36,13 +37,42 @@ def empirical_cov(data, printMode = False):
         # print("np.Covariance: ", np.cov(data))
     return cov, mu
 
-def normal_dist_evaluation(data, printMode = False):
-    '''
-        Calculated the probability that a given set of data follows a normal distribution.
-    '''
-    k2, pval = stats.normaltest(data, 1)
+# def normal_dist_evaluation(data, printMode = False):
+#     '''
+#         Calculated the probability that a given set of data follows a normal distribution.
+#     '''
+#     k2, pval = stats.normaltest(data, 1)
     
-    if(printMode):
-        print("Normal distribution probability: ", pval)
+#     if(printMode):
+#         print("Normal distribution probability: ", pval)
     
-    return pval
+#     return pval
+
+def pearson_correlation_coefficient(attrs, labels):
+    '''
+        Calculates the Pearson Correlation matrix of NxN: The Pearson correlation coefficient is \n
+        a number between -1 and 1. In general, the correlation expresses the degree \n
+        that, on an average, two variables change correspondingly.
+        
+        Returns the correlation matrix for both classes
+    '''
+    c0 = attrs[:, labels==0]
+    c1 = attrs[:, labels==1]
+    cov0, _ = empirical_cov(c0)
+    cov1, _ = empirical_cov(c1)
+    
+    pcc0 = np.zeros((attrs.shape[0], attrs.shape[0]))
+    pcc1 = np.zeros((attrs.shape[0], attrs.shape[0]))
+    for i in range(attrs.shape[0]):
+        for j in range(attrs.shape[0]):
+            corr0_i = cov0[i,j]
+            div0 = (np.sqrt(np.var(c0[i,:]))*np.sqrt(np.var(c0[j,:])))
+            corr0_i = np.abs(corr0_i/div0)
+            pcc0[i,j] = corr0_i
+            
+            corr1_i = cov1[i,j]
+            div1 = (np.sqrt(np.var(c1[i,:]))*np.sqrt(np.var(c1[j,:])))
+            corr1_i = np.abs(corr1_i/div1)
+            pcc1[i,j] = corr1_i
+    
+    return pcc0, pcc1
