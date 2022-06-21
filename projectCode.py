@@ -1,7 +1,8 @@
 from cProfile import label
+from random import gauss
 import numpy as np
 import matplotlib.pyplot as plt
-from modules.dataTransform import normalize, vrow, vcol
+from modules.dataTransform import normalize, vrow, vcol, gaussianize
 from modules.dataLoad import load
 from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
@@ -25,9 +26,10 @@ def main():
     # plt.show()
 
     #cov,mu = empirical_cov(attrs, True)
-
+    gaussianized = gaussianize(attrs, True)
+    plotInitialData(gaussianized, labels)
     pcc0, pcc1 = pearson_correlation_coefficient(attrs, labels);
-    plotCorrelationHeatMap(pcc0)
+    #plotCorrelationHeatMap(pcc0)
 if __name__ == '__main__':
     main()
 

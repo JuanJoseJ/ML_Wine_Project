@@ -17,9 +17,9 @@ def plotInitialData (D, classes, histogramMode = True, scatterMode = False, prin
     '''
 
     if (histogramMode):
-
+    
         D0 = D[:, classes==0] # Bad wines
-        print(D0)
+        #print(D0)
         D1 = D[:, classes==1] # Good wines
 
         attrList = ["fixed acidity",

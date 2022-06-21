@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats
 
 '''
 This file contains all the functions that change a set of data, either on shape or content.
@@ -39,3 +40,55 @@ def normalize(data, printMode = False):
         # print(np.sum(data, 1))
     
     return normData
+
+def gaussianize(attr, printStatus = False):
+    '''
+    ## Parameters
+    - attr = matrix of the attributes (MxN) (ONLY FOR TRAINING)
+    - printStatus = if it is true, print the percentage of conclusion
+
+    ## Explanation
+    It calculates the ranking function of each sample and the percent point function for the training dataset.
+    '''
+
+    # Retrieving number of attributes and number of samples
+    M = attr.shape[0]
+    N = attr.shape[1]
+
+    # Initialize the rank and gaussianized arrays
+    rank = np.zeros((M, N))
+    gaussianized = np.zeros((M, N))
+
+    # Number of times to perform loop (for printing mode only)
+    loops = M*N
+    loopFrac = loops//100
+    loopCount = 0
+    percentage = 0
+    status = "[----------------------------------------------------------------------------------------------------]"
+    addAst = "[****************************************************************************************************]"
+
+    for i in range (M):
+        for j in range (N):
+
+            value = attr[i][j]
+            sum = 0
+
+            for k in range (N):
+                if (attr[i][k] < value):
+                    sum += 1
+            
+            sum += 1
+            rank[i][j] = sum/(N+2)
+            gaussianized[i][j] = scipy.stats.norm.ppf(rank[i][j])
+
+            if (printStatus):
+                loopCount += 1
+                if (loopCount%loopFrac == 0):
+                    percentage += 1
+                    print("A", end = "\r")
+                    print ("Progress of gaussianization: ", addAst[0:loopCount//loopFrac + 1] + status[loopCount//loopFrac + 1:], end="\r")
+
+    print("Finished \r")    
+    return gaussianized
+    
+

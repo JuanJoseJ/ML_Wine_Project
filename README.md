@@ -52,7 +52,17 @@ $$\begin{bmatrix}
 
 \end{bmatrix} $$
 
+### Gaussianization
+When plotting the graphs for each attribute, it was noticed that some values were "too far" from the others, which means that they are probably outliers. Furthermore, the general "format" for some features seemed to have a different form expected for a gaussian distribution. An example of such case can be seen in the following image:
 
+PUT AN EXAMPLE HERE ---------------------------------------
+
+Given that observations, a gaussianization process was done, first by computing the ranking over the training dataset:
+
+$r(x) = \dfrac{ \sum_{i=1}^{N} I[x_i < x] + 1 }{N + 2}$
+
+Where I is the indicator function and N is the number of samples.
+Finally, it is applied the percent point function for each sample calculated.
 
 ### Dimension reduction
 (!!!) LETS EVALUATE WHICH ATTRIBUTES ARE RELEVANT FOR THE CLASSIFICATION
