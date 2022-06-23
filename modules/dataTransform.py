@@ -43,12 +43,15 @@ def normalize(data, printMode = False):
 
 def gaussianize(attr, printStatus = False):
     '''
+    ## Explanation
+    It calculates the ranking function of each sample and the percent point function for the training dataset.
+
     ## Parameters
     - attr = matrix of the attributes (MxN) (ONLY FOR TRAINING)
     - printStatus = if it is true, print the percentage of conclusion
 
-    ## Explanation
-    It calculates the ranking function of each sample and the percent point function for the training dataset.
+    ## Return
+    - Resulting matrix (MxN) of gaussianized features
     '''
 
     # Retrieving number of attributes and number of samples
@@ -60,12 +63,13 @@ def gaussianize(attr, printStatus = False):
     gaussianized = np.zeros((M, N))
 
     # Number of times to perform loop (for printing mode only)
-    loops = M*N
-    loopFrac = loops//100
-    loopCount = 0
-    percentage = 0
-    status = "[----------------------------------------------------------------------------------------------------]"
-    addAst = "[****************************************************************************************************]"
+    if (printStatus):
+        loops = M*N
+        loopFrac = loops//100
+        loopCount = 0
+        percentage = 0
+        status = "[----------------------------------------------------------------------------------------------------]"
+        addAst = "[****************************************************************************************************]"
 
     for i in range (M):
         for j in range (N):
