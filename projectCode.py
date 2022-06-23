@@ -37,6 +37,9 @@ def main():
 
     # ====== Logistic regression ===============
     (DTR, LTR), (DTE, LTE) = split_db_2to1(attrs, labels) 
+    predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True)
+
+    # Quadratic logistic regression:
     predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True, quadratic = True, printIterations=True)
     # ==========================================
 
