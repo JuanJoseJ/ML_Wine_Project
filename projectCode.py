@@ -3,8 +3,8 @@ from random import gauss
 import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize
-from modules.dataLoad import load
-from modules.dataEvaluation import comp_cov_matrix, logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient
+from modules.dataLoad import load, split_db_2to1
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
 
 def main():
@@ -27,15 +27,23 @@ def main():
     # plt.show()
 
     #cov,mu = empirical_cov(attrs, True)
-    
+
+    # ====== GAUSSIANIZATION ===================
+    # gaussianized = gaussianize(attrs, True)
     # plotInitialData(gaussianized, labels)
+    # ==========================================
     
-    # check the gaussean model
-    # pcc0, pcc1 = pearson_correlation_coefficient(gaussianized, labels);
-    # plotCorrelationHeatMap(pcc0)
-    # plotCorrelationHeatMap(pcc1) 
-    # comp_cov_matrix(gaussianized, labels, True)
-    
+    #pcc0, pcc1 = pearson_correlation_coefficient(attrs, labels)
+    #plotCorrelationHeatMap(pcc0)
+
+    # ====== Logistic regression ===============
+    (DTR, LTR), (DTE, LTE) = split_db_2to1(attrs, labels) 
+    predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True)
+
+    # Quadratic logistic regression:
+    predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True, quadratic = True, printIterations=True)
+    # ==========================================
+
 if __name__ == '__main__':
     main()
 
