@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize
 from modules.dataLoad import load, split_db_2to1
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
 
 def main():
@@ -37,10 +37,15 @@ def main():
 
     # ====== Logistic regression ===============
     (DTR, LTR), (DTE, LTE) = split_db_2to1(attrs, labels) 
-    predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True)
+    # predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True)
 
-    # Quadratic logistic regression:
-    predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True, quadratic = True, printIterations=True)
+    #  Quadratic logistic regression:
+    # predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True, quadratic = True, printIterations=True)
+    # ==========================================
+
+    # ================ SVM =====================
+    C = 1
+    calculateSVM(DTR, LTR, C, DTE, LTE, verbose = True, linear=True, K = 0, gamma = 1)
     # ==========================================
 
 if __name__ == '__main__':
