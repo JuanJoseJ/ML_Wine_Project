@@ -11,6 +11,7 @@ def main():
     attrs, labels = load('./Train.txt')
     #plotInitialData(attrs, labels)
     attrs = normalize(attrs)
+    gaussianized = gaussianize(attrs)
 
     # firstAttr = attrs[1, :]
     # firstAttr = vrow(firstAttr)

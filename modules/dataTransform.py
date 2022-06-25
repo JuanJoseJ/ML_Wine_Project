@@ -95,4 +95,8 @@ def gaussianize(attr, printStatus = False):
     print("Finished \r")    
     return gaussianized
     
+    
+def class_balancing(attrs, labels):
+    
+    return
 

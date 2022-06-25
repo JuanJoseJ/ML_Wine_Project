@@ -1,6 +1,9 @@
 from math import sqrt
+from unittest import result
 import numpy as np
 from scipy import stats
+import scipy.special as sp
+from modules.dataTransform import vrow
 import scipy.optimize
 '''
 This file contains all the function related to extracting characteristics from a set of data and also the models.
@@ -38,22 +41,12 @@ def empirical_cov(data, printMode = False):
         # print("np.Covariance: ", np.cov(data))
     return cov, mu
 
-# def normal_dist_evaluation(data, printMode = False):
-#     '''
-#         Calculated the probability that a given set of data follows a normal distribution.
-#     '''
-#     k2, pval = stats.normaltest(data, 1)
-    
-#     if(printMode):
-#         print("Normal distribution probability: ", pval)
-    
-#     return pval
-
 def pearson_correlation_coefficient(attrs, labels):
     '''
-        Calculates the Pearson Correlation matrix of NxN: The Pearson correlation coefficient is \n
-        a number between -1 and 1. In general, the correlation expresses the degree \n
-        that, on an average, two variables change correspondingly.
+        Calculates the Pearson Correlation matrix of NxN with binary data:\n
+        The Pearson correlation coefficient is a number between -1 and 1. \n
+        In general, the correlation expresses the degree that, on an average, \n
+        two variables change correspondingly.\n
         
         Returns the correlation matrix for both classes
     '''
@@ -78,6 +71,57 @@ def pearson_correlation_coefficient(attrs, labels):
     
     return pcc0, pcc1
 
+def calc_likehoods(data, mu, cov):
+    '''
+        Function to calculate the likehoood of every sample given some mu and cov
+    '''
+    mArr = np.array([]) # Mock array to fill with ll of each class
+    ll = logpdf_GAU_ND(data, mu, cov)
+    mArr = np.append(mArr, ll)
+    return mArr
+
+def comp_cov_matrix(attrs, labels, printMode=False):
+    '''
+        Compare the covariance matrix for the binary data
+    '''
+    c0 = attrs[:, labels==0]
+    c1 = attrs[:, labels==1]
+    cov0, _ = empirical_cov(c0)
+    cov1, _ = empirical_cov(c1)
+    result = np.array_equal(cov0, cov1)
+    
+    if(printMode):
+        print("Is the covariance for the two classes equal?")
+        print(result)
+    return result
+
+def log_MVG_Classifier(testData, trainData): # Multi Variate Classifier using the logarithms
+    '''
+    Parameters: \n
+    \t -testData: Both parameters and labels of the evaluation data \n
+    \t -trainData: Both parameters and labels of the training data
+    Returns: A matrix with the predictions for the evaluation data.
+    '''
+    # Here I iterate over the different classes of the training data to get the likehoods of each class
+    S = np.zeros(testData[0].shape[1]) # Matrix to keep the loglikehoods. Started like this to keep shape
+    for j in range(np.unique(testData[1]).size):
+        mu = trainData[0][:,trainData[1]==j].mean(1)
+        mu = mu.reshape((mu.size, 1))
+        cov = empirical_cov(trainData[0][:,trainData[1]==j])
+        ll = calc_likehoods(testData[0], mu, cov)
+        S = np.vstack((S, ll)) # Contains the ll for each sample in each class
+    S = np.delete(S, 0, 0) # pop the zeros
+    Pc = 1/3 # Represents the probability of the class being c. It was given and its the same for all classes here.
+    # Now we calculate the class posterior probability as logSJoint/SMarginal. This represents the probability
+    # that an observation is part of a class given some attributes know a priori.
+    logSJoint = S + np.log(Pc) # Creo la matriz de joint densities multiplicando la S por una prior probability DADA
+    logSMarginal = vrow(sp.logsumexp(logSJoint, axis=0)) # Its the probability of a sample having its current attriutes
+
+    logSPost = logSJoint-logSMarginal # Class posterior probability
+    # Finally we got a matrix with the class probability (row) for each sample (column), 
+    # for each column we have to select which row is the one with the highest value. Like this:
+    logSPost = np.argmax(logSPost, axis=0); #argmax returns the index of the greatest value in a given axis
+    return logSPost
 #================================= LOGISTIC REGRESSION ==============================================
 
 def logreg_obj(v, DTR, LTR, l, pit):
@@ -261,6 +305,7 @@ def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, prin
     return predicted
 
 #====================================================================================================
+<<<<<<< HEAD
 
 #============================================= SVM ==================================================
 def linearSVM_H(DTR, LTR, K = 1):
@@ -505,3 +550,5 @@ def dualityGap(w, C, z, extD, LD):
     return gap
 #====================================================================================================
 
+=======
+>>>>>>> d46bfc95809c0bcf78bcd2697d2424022956d8b8

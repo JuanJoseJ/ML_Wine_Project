@@ -67,6 +67,21 @@ Finally, it is applied the percent point function for each sample calculated.
 ### Dimension reduction
 (!!!) LETS EVALUATE WHICH ATTRIBUTES ARE RELEVANT FOR THE CLASSIFICATION
 
+## Gaussean models analysis
+
+### Correlation analysis
+
+A correlation analysis of Gaussianized features shows that for both classes the 'total sulfur dioxide' and 'free sulfur dioxide' attributes are highly correlated, while other features are also somehow correlated.
+
+This means that the assumption of independence for Naïve Balles classifier are not strictly accomplished and we'll probably get better results with a Full Covariance model.
+
+![Correlation heatmap for class 0](./images/correlation_heatmap_c0.png "Correlation heatmap for class 0")
+![Correlation heatmap for class 1](./images/correlation_heatmap_c1.png "Correlation heatmap for class 1")
+
+### Covarianze analysis
+
+The coavariance matrix for the two classes were found not to be equal, which means that using a Tied Covariance model would also get worst results than non tied models. 
+
 # What to include in the report
 
 ## Analysis of the problem
