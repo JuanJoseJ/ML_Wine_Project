@@ -46,7 +46,7 @@ def main():
 
     # ================ SVM =====================
     C = 1
-    calculateSVM(DTR, LTR, C, DTE, LTE, verbose = True, linear=True, K = 0, gamma = 1)
+    calculateSVM(DTR, LTR, C, DTE, LTE, verbose = True, linear=False, K = 0, gamma = 1)
     # ==========================================
 
 if __name__ == '__main__':
