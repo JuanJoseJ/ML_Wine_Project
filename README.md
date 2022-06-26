@@ -30,6 +30,11 @@ Output variable (based on sensory data):
 
 ## Transformation of data
 
+### K-folds approach
+
+Total amount of samples = 1839. We dropped the last 9 data to be able to use 10 fold
+Picked the avg of the minDCF since kfold allows observing how different values could be obtained with different combination of data
+
 ### Normalization
 As a first step before the training of the model, some attributes were found to have a greater range than others, which may generate a bias on the model for the greater numbers; to solve this problem, a normalization of the values was done.
 ### Attribute independence analysis
@@ -81,6 +86,10 @@ This means that the assumption of independence for Naïve Balles classifier are 
 ### Covarianze analysis
 
 The coavariance matrix for the two classes were found not to be equal, which means that using a Tied Covariance model would also get worst results than non tied models. 
+
+### Results report
+
+The data was run initially without gaussianissed attributes on a full covariance logMVG classifier using k-folds, which achived a mean accuarcy of 0.793; with gaussianissed data, the same model acchived an improved mean accuarcy of 0.825.
 
 # What to include in the report
 

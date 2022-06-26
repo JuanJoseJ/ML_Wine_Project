@@ -124,7 +124,18 @@ def comp_cov_matrix(attrs, labels, printMode=False):
         print(result)
     return result
 
-def log_MVG_Classifier(DT, LT, mu, cov): # Multi Variate Classifier using the logarithms
+# ============================== Full-Cov Gaussean Classifier =================================================
+
+def log_MVG_Classifier(DT, LT, mu, cov):
+    '''
+        ### Params
+        - Data to classify
+        - Labels 
+        - Training data mean
+        - Training data covariance
+        ### Return
+        The function returns the predicted values for the full-cov gaussean model
+    '''
     S = np.zeros(DT.shape[1])
     for j in range(np.unique(LT).size):
         ll = logpdf_GAU_ND(DT, mu[j], cov[j])
@@ -135,8 +146,10 @@ def log_MVG_Classifier(DT, LT, mu, cov): # Multi Variate Classifier using the lo
     logSMarginal = vrow(sp.logsumexp(logSJoint, axis=0))
 
     logSPost = logSJoint-logSMarginal # Class posterior probability
-    logSPost = np.argmax(logSPost, axis=0);
-    return logSPost
+    prediction = np.argmax(logSPost, axis=0)
+    llr = logSPost[1,:] - logSPost[0, :]
+    return prediction, llr
+
 #================================= LOGISTIC REGRESSION ==============================================
 
 def logreg_obj(v, DTR, LTR, l, pit):
@@ -592,7 +605,7 @@ def confusionMatrix(prediction, correct):
 
     return confMatrix
 
-def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, llr = None, labels = None, threshDivision = None):
+def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = None, labels = None, threshDivision = None):
     '''
     ## Quick explanation:
     Evaluation of predictions can be done using empirical Bayes risk (or detection cost function, DCF), that represents the
@@ -603,7 +616,7 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, llr = Non
     - piTil = effective prior (cfn = cfp = 1)
     - normalized = if want to normalize the errors so to get a more accurate value
     - minimum = decides if want to compute the minimum (for this, want also the divisions for threshold variation and the llr)
-    - llr = log likilihood ratios. Needed for the calculation of minimum.
+    - scores = What will be used to set the threshold. If it is a gaussian, use log likilihood ratios. If it is SVM or GMM, use the scores itself. Needed for the calculation of minimum.
     - labels = Testing labels (LTE)
     - threshDivision = how many tests for different threshold.
 
@@ -614,17 +627,19 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, llr = Non
     Cfn = 1
     Cfp = 1
 
+    scores = scores.astype(float)
+    scoresEval = scores
+    scoresEval = np.insert(scores, 0, -np.inf)
+    scoresEval = np.insert(scores, len(scores), np.inf)
+
     if (minimum and normalized): # This is the minimum that the system can achieve given piTil
 
         DCFValues = []
-        maxThresh = np.max(llr)
-        minThresh = np.min(llr)
 
-        for t in range (1, threshDivision, 1):
+        for t in range (len(scoresEval)):
 
-            thresh = t*( (maxThresh-minThresh)/threshDivision )
-            thresh += minThresh
-            predicted = np.where(llr > thresh, 1, 0)
+            thresh = scoresEval[t]
+            predicted = np.where(scores > thresh, 1, 0)
             confMatrix = confusionMatrix(predicted, labels)
 
             # Retrieve number of false negatives and false positives
