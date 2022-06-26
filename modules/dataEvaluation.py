@@ -124,32 +124,18 @@ def comp_cov_matrix(attrs, labels, printMode=False):
         print(result)
     return result
 
-def log_MVG_Classifier(testData, trainData): # Multi Variate Classifier using the logarithms
-    '''
-    Parameters: \n
-    \t -testData: Both parameters and labels of the evaluation data \n
-    \t -trainData: Both parameters and labels of the training data
-    Returns: A matrix with the predictions for the evaluation data.
-    '''
-    # Here I iterate over the different classes of the training data to get the likehoods of each class
-    S = np.zeros(testData[0].shape[1]) # Matrix to keep the loglikehoods. Started like this to keep shape
-    for j in range(np.unique(testData[1]).size):
-        mu = trainData[0][:,trainData[1]==j].mean(1)
-        mu = mu.reshape((mu.size, 1))
-        cov = empirical_cov(trainData[0][:,trainData[1]==j])
-        ll = calc_likehoods(testData[0], mu, cov)
-        S = np.vstack((S, ll)) # Contains the ll for each sample in each class
-    S = np.delete(S, 0, 0) # pop the zeros
-    Pc = 1/3 # Represents the probability of the class being c. It was given and its the same for all classes here.
-    # Now we calculate the class posterior probability as logSJoint/SMarginal. This represents the probability
-    # that an observation is part of a class given some attributes know a priori.
-    logSJoint = S + np.log(Pc) # Creo la matriz de joint densities multiplicando la S por una prior probability DADA
-    logSMarginal = vrow(sp.logsumexp(logSJoint, axis=0)) # Its the probability of a sample having its current attriutes
+def log_MVG_Classifier(DT, LT, mu, cov): # Multi Variate Classifier using the logarithms
+    S = np.zeros(DT.shape[1])
+    for j in range(np.unique(LT).size):
+        ll = logpdf_GAU_ND(DT, mu[j], cov[j])
+        S = np.vstack((S, ll))
+    S = np.delete(S, 0, 0)
+    Pc = 1/np.unique(LT).size
+    logSJoint = S + np.log(Pc)
+    logSMarginal = vrow(sp.logsumexp(logSJoint, axis=0))
 
     logSPost = logSJoint-logSMarginal # Class posterior probability
-    # Finally we got a matrix with the class probability (row) for each sample (column), 
-    # for each column we have to select which row is the one with the highest value. Like this:
-    logSPost = np.argmax(logSPost, axis=0); #argmax returns the index of the greatest value in a given axis
+    logSPost = np.argmax(logSPost, axis=0);
     return logSPost
 #================================= LOGISTIC REGRESSION ==============================================
 
