@@ -14,6 +14,7 @@ def logpdf_GAU_ND(D, mu, C):
     Calculates the log-densities of data matrix "D".\n
     D = data matrix (MxN == attributes x samples), mu = (Mx1) containing the mean for each attribute, C = (MxM) covariance matrix. \n
     '''
+    #print("Shape of D: ", D.shape, " Shape of mu: ", mu, " Shape of C: ", C)
     M = D.shape[0]
     T1 = -(M/2)*np.log(2*np.pi)
     T2 = -(1/2)*np.linalg.slogdet(C)[1]
@@ -23,6 +24,8 @@ def logpdf_GAU_ND(D, mu, C):
     
     T3 = np.diag(T3)
     return T1 + T2 + T3
+
+#===================================================================================================
 
 def empirical_cov(data, printMode = False):
     '''
@@ -71,6 +74,17 @@ def pearson_correlation_coefficient(attrs, labels):
     
     return pcc0, pcc1
 
+def calc_likehoods_ratio(data, mu, cov):
+    '''
+        Function to calculate the likelihoood ratio to use to calculate the DCF
+    '''
+    mArr = np.array([]) # Mock array to fill with ll of each class
+    ll0 = logpdf_GAU_ND(data, mu[0], cov[0])
+    ll1 = logpdf_GAU_ND(data, mu[1], cov[1]) 
+    ll = ll1 - ll0
+    mArr = np.append(mArr, ll)
+    return mArr
+
 def calc_likehoods(data, mu, cov):
     '''
         Function to calculate the likehoood of every sample given some mu and cov
@@ -79,6 +93,21 @@ def calc_likehoods(data, mu, cov):
     ll = logpdf_GAU_ND(data, mu, cov)
     mArr = np.append(mArr, ll)
     return mArr
+#===================================================================================================
+def calc_mu_cov(DTR, LTR):
+    '''
+    Computes the mu of the training dataset
+    '''
+    cov = []
+    mu = []
+    for j in range(np.unique(LTR).size):
+        mui = DTR[:,LTR==j].mean(axis=1)
+        mui = mui.reshape((mui.shape[0], 1))
+        covi, _ = empirical_cov(DTR[:,LTR==j])
+        mu.append(mui)
+        cov.append(covi)
+
+    return mu, cov
 
 def comp_cov_matrix(attrs, labels, printMode=False):
     '''
@@ -95,7 +124,18 @@ def comp_cov_matrix(attrs, labels, printMode=False):
         print(result)
     return result
 
-def log_MVG_Classifier(DT, LT, mu, cov): # Multi Variate Classifier using the logarithms
+# ============================== Full-Cov Gaussean Classifier =================================================
+
+def log_MVG_Classifier(DT, LT, mu, cov):
+    '''
+        ### Params
+        - Data to classify
+        - Labels 
+        - Training data mean
+        - Training data covariance
+        ### Return
+        The function returns the predicted values for the full-cov gaussean model
+    '''
     S = np.zeros(DT.shape[1])
     for j in range(np.unique(LT).size):
         ll = logpdf_GAU_ND(DT, mu[j], cov[j])
@@ -106,8 +146,10 @@ def log_MVG_Classifier(DT, LT, mu, cov): # Multi Variate Classifier using the lo
     logSMarginal = vrow(sp.logsumexp(logSJoint, axis=0))
 
     logSPost = logSJoint-logSMarginal # Class posterior probability
-    logSPost = np.argmax(logSPost, axis=0);
-    return logSPost
+    prediction = np.argmax(logSPost, axis=0)
+    llr = logSPost[1,:] - logSPost[0, :]
+    return prediction, llr
+
 #================================= LOGISTIC REGRESSION ==============================================
 
 def logreg_obj(v, DTR, LTR, l, pit):
@@ -495,6 +537,7 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
         print("Duality gap = ", gap)
         loss, _ = minDualSVM(x, H)
         print("Loss = ", loss)
+
     elif(verbose):
         print("===================== NON - LINEAR SVM PREDICTION VERBOSE MODE ============================")
         print("Obtained prediction of classes:\n")
@@ -506,6 +549,8 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
                 correct +=1
         print( 100*(correct/LTE.shape[0]), "%" )
         print("Loss = ", f)
+    
+    return predicted
 
 def dualityGap(w, C, z, extD, LD):
     '''
@@ -533,4 +578,150 @@ def dualityGap(w, C, z, extD, LD):
 
     gap = j + LD
     return gap
+#====================================================================================================
+
+#=========================== Confusion matrix and detection costs ===================================
+
+def confusionMatrix(prediction, correct):
+    '''
+    ## Params:
+    - prediction = List of predicted classes (assumed to be an 1 dim np array)
+    - correct = List of correct classes
+
+    ## Returns:
+    Confusion matrix (N,N) where N is the number of classes
+    '''
+    # Creating empty confusion matrix
+    confMatrix = np.zeros((2, 2))
+
+    # Casting prediction to be integers
+    prediction = prediction.astype(int)
+    correct = correct.astype(int)
+
+    for i in range (prediction.shape[0]):
+        # print("AAAAAAAAAAAA", prediction.shape[0])
+        # print("BBBBBBBBBBBB", correct.shape[0])
+        confMatrix[prediction[i]][correct[i]] += 1
+
+    return confMatrix
+
+def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = None, labels = None, threshDivision = None):
+    '''
+    ## Quick explanation:
+    Evaluation of predictions can be done using empirical Bayes risk (or detection cost function, DCF), that represents the
+    cost that we pay due to our decisions c for the test data.
+
+    ## Params:
+    - confMatrix = confusion matrix for given attributes on piTil
+    - piTil = effective prior (cfn = cfp = 1)
+    - normalized = if want to normalize the errors so to get a more accurate value
+    - minimum = decides if want to compute the minimum (for this, want also the divisions for threshold variation and the llr)
+    - scores = What will be used to set the threshold. If it is a gaussian, use log likilihood ratios. If it is SVM or GMM, use the scores itself. Needed for the calculation of minimum.
+    - labels = Testing labels (LTE)
+    - threshDivision = how many tests for different threshold.
+
+    ## Returns:
+    The result of bayes risk
+    '''
+
+    Cfn = 1
+    Cfp = 1
+
+    scores = scores.astype(float)
+    scoresEval = scores
+    scoresEval = np.insert(scores, 0, -np.inf)
+    scoresEval = np.insert(scores, len(scores), np.inf)
+
+    if (minimum and normalized): # This is the minimum that the system can achieve given piTil
+
+        DCFValues = []
+
+        for t in range (len(scoresEval)):
+
+            thresh = scoresEval[t]
+            predicted = np.where(scores > thresh, 1, 0)
+            confMatrix = confusionMatrix(predicted, labels)
+
+            # Retrieve number of false negatives and false positives
+            FN = confMatrix[0][1]
+            FP = confMatrix[1][0]
+
+            # Retrieving the true positive and true negative values:
+            TP = confMatrix[1][1]
+            TN = confMatrix[0][0]
+
+            FNR = FN/(FN + TP)
+            FPR = FP/(FP + TN)
+
+            DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
+            DCFValues.append(DCF/np.min([piTil*Cfn, (1-piTil)*Cfp]))
+        
+        return np.min(DCFValues)
+
+    elif(minimum and normalized == False):
+
+        DCFValues = []
+        maxThresh = np.max(llr)
+        minThresh = np.min(llr)
+
+        for t in range (1, threshDivision, 1):
+
+            thresh = t*( (maxThresh-minThresh)/threshDivision )
+            thresh += minThresh
+            predicted = np.where(llr > thresh, 1, 0)
+            confMatrix = confusionMatrix(predicted, labels)
+
+            # Retrieve number of false negatives and false positives
+            FN = confMatrix[0][1]
+            FP = confMatrix[1][0]
+
+            # Retrieving the true positive and true negative values:
+            TP = confMatrix[1][1]
+            TN = confMatrix[0][0]
+
+            FNR = FN/(FN + TP)
+            FPR = FP/(FP + TN)
+
+            DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
+            DCFValues.append(DCF)
+        
+        return np.min(DCFValues)
+    
+    elif(normalized):
+
+        # Retrieve number of false negatives and false positives
+        FN = confMatrix[0][1]
+        FP = confMatrix[1][0]
+
+        # Retrieving the true positive and true negative values:
+        TP = confMatrix[1][1]
+        TN = confMatrix[0][0]
+
+        FNR = FN/(FN + TP)
+        FPR = FP/(FP + TN)
+
+        # Doing the actual computation of bayes risk:
+        DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
+        return DCF/np.min([piTil*Cfn, (1-piTil)*Cfp])
+
+    elif(not normalized):
+
+        Cfn = 1
+        Cfp = 1
+
+        # Retrieve number of false negatives and false positives
+        FN = confMatrix[0][1]
+        FP = confMatrix[1][0]
+
+        # Retrieving the true positive and true negative values:
+        TP = confMatrix[1][1]
+        TN = confMatrix[0][0]
+
+        FNR = FN/(FN + TP)
+        FPR = FP/(FP + TN)
+
+        # Doing the actual computation of bayes risk:
+        DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
+        return DCF
+
 #====================================================================================================

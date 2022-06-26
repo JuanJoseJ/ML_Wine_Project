@@ -92,11 +92,67 @@ def gaussianize(attr, printStatus = False):
                     print("A", end = "\r")
                     print ("Progress of gaussianization: ", addAst[0:loopCount//loopFrac + 1] + status[loopCount//loopFrac + 1:], end="\r")
 
-    print("Finished \r")    
+    print("Finished Gaussianization")    
     return gaussianized
     
-    
-def class_balancing(attrs, labels):
-    
-    return
+def k_folds(data, labels, k=10):
+    '''
+    ### Explanation
+    Returns the k folds of mixed data and labels that can be used for cross validation
+    ### Params
+    - All the attributes of the data set
+    - All the labels of the data set (Corresponding to the attributes)
+    - The number of folds to use (Default is 10)
+    ### Return
+    The tuple of data and labels
+    '''
+    # Mix the data
+    temp_data = np.vstack([data, labels])
+    temp_data = np.transpose(temp_data)
+    np.random.shuffle(temp_data)
+    temp_data = np.transpose(temp_data)
+    # Separate data and labels again
+    temp_labels = temp_data[-1,:]
+    temp_data = np.delete(temp_data, -1, 0)
+    # Create the folds
+    folds_data = np.split(temp_data, k, axis=1)
+    folds_labels = np.split(temp_labels, k)
+    return folds_data, folds_labels
 
+def PCA(D, m, verif = False):
+    '''
+    PCA = Principal Component Analysis. 
+    D is the data matrix where columns are the different samples and lines are the attributes of each sample.
+    D.shape = MxN
+    ##Params
+    - D = Data matrix (MxN) where M = number of attributes and N = number of samples
+    - m = Number of attributes you want to get
+    - verif = Just to print some additional Status
+    ## Return
+    A matrix of size (mxN)
+    '''
+    # First step: Calculate mu as the mean of each attribute between all samples.
+    mu = D.mean(1)
+    mu = vcol(mu)
+
+    # Now it is needed to center the data, i.e., subtract mu (the mean) from all columns of D.
+    DC = D - mu
+
+    # Now, it is needed to calculate the covariance matrix C = 1/N * Dc*Dc.T
+    N = D.shape[1]
+    C = (1/N)*np.dot(DC, np.transpose(DC))
+
+    # Next, we have to compute eigenvectors and eigenvalues:
+    sortedEigenValues, eigenVectors = np.linalg.eigh(C) 
+
+    # Note: they are sorted from smallest to largest. We need the opposite:
+    # Need to pick the m largest eigenVectors "P" to project the samples into m dimensions:
+    P = eigenVectors[:, ::-1][:, 0:m]
+
+    if (verif == True):
+        print("Obtained matrix shape:\n", P.shape)
+
+    # Finally, it is needed to apply the projection to a matrix of samples, in this case, "D":
+    DP = np.dot(np.transpose(P), D)
+
+    return DP

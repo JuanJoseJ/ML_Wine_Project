@@ -30,9 +30,14 @@ Output variable (based on sensory data):
 
 ## Transformation of data
 
+### K-folds approach
+
+Total amount of samples = 1839. We dropped the last 9 samples to be able to use k=10 fold
+Picked the avg of the minDCF since kfold allows observing how different values could be obtained with different combination of data
+
 ### Normalization
 As a first step before the training of the model, some attributes were found to have a greater range than others, which may generate a bias on the model for the greater numbers; to solve this problem, a normalization of the values was done.
-### Attribute independence analysis
+<!-- ### Attribute independence analysis (!!!) I THINK THIS IS NOT TRUE LOL
 The attributes were found to be independent from each other after generating the covariance matrix with a maximum covariance of 0.04330498659806576 and a minimum of -0.022902989038180943, which were considered close to zero. The formula used to calculate the covariance was:
 $$\mathrm{C} = \dfrac{1}{N}\sum_{i=1}^{N}(x_i-\mu)(x_i-\mu)^T$$
 The covaariance matrix generated was:
@@ -50,7 +55,7 @@ $$\begin{bmatrix}
 0.00411592 & 0.00272755 & 0.00195716 & -0.00441169 &  0.00323537 & -0.00087798 &  -0.00435532 & 0.00614918 & 0.00352868 & 0.01657311 & 0.00045398 \\
 -0.0017129 & -0.00133022 & 0.00053646 & -0.0118106 & -0.0027453 & -0.0017517 &  -0.00631409 & -0.02290299 & 0.00351852 & 0.00045398 & 0.03152529 \\
 
-\end{bmatrix} $$
+\end{bmatrix} $$ -->
 
 ### Gaussianization
 When plotting the graphs for each attribute, it was noticed that some values were "too far" from the others, which means that they are probably outliers. Furthermore, the general "format" for some features seemed to have a different form expected for a gaussian distribution. An example of such case can be seen in the following image:
@@ -69,18 +74,22 @@ Finally, it is applied the percent point function for each sample calculated.
 
 ## Gaussean models analysis
 
-### Correlation analysis
+### Correlation
 
 A correlation analysis of Gaussianized features shows that for both classes the 'total sulfur dioxide' and 'free sulfur dioxide' attributes are highly correlated, while other features are also somehow correlated.
 
-This means that the assumption of independence for Naïve Balles classifier are not strictly accomplished and we'll probably get better results with a Full Covariance model.
+This means that the assumption of independence for Naive Balles classifier are not strictly accomplished and we'll probably get better results with a Full Covariance model.
 
 ![Correlation heatmap for class 0](./images/correlation_heatmap_c0.png "Correlation heatmap for class 0")
 ![Correlation heatmap for class 1](./images/correlation_heatmap_c1.png "Correlation heatmap for class 1")
 
-### Covarianze analysis
+### Covarianze
 
 The coavariance matrix for the two classes were found not to be equal, which means that using a Tied Covariance model would also get worst results than non tied models. 
+
+### Results report
+
+Initially, the model was run with the original unchanged data, which achived with a π=0.5 a mean DCF of 0.363 and with a π=0.4 a DCF of 0.491; for gaussianissed data we on a π=0.5 it achived a DCF of 0.328 and for a π=0.4 it got a DCF of 0.427. An improvement by the gausseanization of the data was expected as representative outliners were found, although a decrease on the prior probability for class 1, which has less samples, should improve the result, which it didnt. Finally, PCA for m=10 was used on the gausseanissed data the reduce furthermore the effect of the codependence of the attributes. For a π=0.5 an improved DCF of 0.324 was achived and with π=0.4 the DCF was 0.424.
 
 # What to include in the report
 
