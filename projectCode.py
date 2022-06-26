@@ -4,14 +4,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize
 from modules.dataLoad import load, split_db_2to1
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
+
+
 
 def main():
     attrs, labels = load('./Train.txt')
     #plotInitialData(attrs, labels)
     attrs = normalize(attrs)
-    gaussianized = gaussianize(attrs)
+    gaussianized = gaussianize(attrs, True)
 
     # firstAttr = attrs[1, :]
     # firstAttr = vrow(firstAttr)
@@ -45,8 +47,13 @@ def main():
     # ==========================================
 
     # ================ SVM =====================
-    C = 1
-    calculateSVM(DTR, LTR, C, DTE, LTE, verbose = True, linear=False, K = 0, gamma = 1)
+    C = 2
+    predicted = calculateSVM(DTR, LTR, C, DTE, LTE, verbose = False, linear=False, K = 0, gamma = np.exp(-2))
+    print(predicted)
+    confMat = confusionMatrix(predicted, LTE)
+    mu, covMatrix = calc_mu_cov(DTE, LTE)
+    llr = calc_likehoods_ratio(DTE, mu, covMatrix)
+    print("Computed bayes risk (DCF): ", bayes_risk(confMat, 0.5, True, False, llr, LTE, 100))
     # ==========================================
 
 if __name__ == '__main__':

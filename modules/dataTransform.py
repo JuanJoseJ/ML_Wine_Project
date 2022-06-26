@@ -92,7 +92,7 @@ def gaussianize(attr, printStatus = False):
                     print("A", end = "\r")
                     print ("Progress of gaussianization: ", addAst[0:loopCount//loopFrac + 1] + status[loopCount//loopFrac + 1:], end="\r")
 
-    print("Finished \r")    
+    print("Finished Gaussianization")    
     return gaussianized
     
     
