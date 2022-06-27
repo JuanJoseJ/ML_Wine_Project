@@ -4,6 +4,8 @@ import scipy.stats
 '''
 This file contains all the functions that change a set of data, either on shape or content.
 '''
+def mcol(v):
+    return v.reshape((v.size, 1))
 
 def vcol(vlist):
     '''

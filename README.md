@@ -89,7 +89,7 @@ The coavariance matrix for the two classes were found not to be equal, which mea
 
 ### Results report
 
-Initially, the model was run with the original unchanged data, which achived with a π=0.5 a mean DCF of 0.363 and with a π=0.4 a DCF of 0.491; for gaussianissed data we on a π=0.5 it achived a DCF of 0.328 and for a π=0.4 it got a DCF of 0.427. An improvement by the gausseanization of the data was expected as representative outliners were found, although a decrease on the prior probability for class 1, which has less samples, should improve the result, which it didnt. Finally, PCA for m=10 was used on the gausseanissed data the reduce furthermore the effect of the codependence of the attributes. For a π=0.5 an improved DCF of 0.324 was achived and with π=0.4 the DCF was 0.424.
+Initially, the model was run with the original unchanged data, which achived with a π=0.5 a mean DCF of 0.290 and with a π=0.4 a DCF of 0.356; for the gaussianissed data without PCA on a π=0.5 it achived a DCF of 0.291 and for a π=0.4 it got a DCF of 0.352. An improvement by the gausseanization of the data was expected as representative outliners were found, also, a decrease on the prior probability for class 1, which has less samples, was expected to improve the result, which it didnt. Finally, a PCA for m=10 was used on the gausseanissed data the reduce furthermore the effect of the codependence of the attributes. For a π=0.5 an improved DCF of 0.292 was achived and with π=0.4 the DCF was 0.359.
 
 # What to include in the report
 
