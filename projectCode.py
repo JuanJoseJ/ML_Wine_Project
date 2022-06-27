@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize, k_folds, PCA
 from modules.dataLoad import load, split_db_2to1
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, logpdf_GMM, GMM_EM, GMM_LBG, initial_gmm
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
 
 
@@ -45,6 +45,32 @@ def main():
 
     #  Quadratic logistic regression:
     # predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.3, verbose = True, quadratic = True, printIterations=True)
+    # ==========================================
+
+    # ================ GMM =====================
+    
+    gmm = initial_gmm(DTR,LTR)
+    opt_gmm = GMM_EM(DTR, gmm, 0.01)
+    # gmm_2G = GMM_LBG(opt_gmm, 0.1, 0.01)
+    # opt_gmm_2G = GMM_EM(DTR, gmm_2G, 0.01)
+    # gmm_4G = GMM_LBG(opt_gmm_2G, 0.1, 0.01)
+    # opt_gmm_4G = GMM_EM(DTR, gmm_4G, 0.01)
+    # S, logdens = logpdf_GMM(DTE, opt_gmm)
+    
+    # Prediction
+    # JDensities = []
+    # for i in range(int(S.shape[0]/2)):
+    #     JDensities.append(S[i,:]+S[i+1,:])
+    # for i in range(int(S.shape[0]/4)):
+    #     JDensities.append(S[i,:]+S[i+1,:]+S[i+2,:]+S[i+3,:])
+    # JDensities = np.matrix(S)
+    # logSPost = JDensities-logdens
+    # prediction = np.argmax(logSPost, axis=0)
+    # print(prediction)
+    # goodPred = (prediction==LTE).sum()
+    # acc = goodPred/LTE.size
+    # print(acc)
+    
     # ==========================================
 
     # ================ SVM =====================
