@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize, k_folds, PCA
 from modules.dataLoad import load, split_db_2to1
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, logpdf_GMM, GMM_EM, GMM_LBG, initial_gmm
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calculateSVM, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, plotMinDCFLogReg
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
 
 
@@ -114,11 +114,13 @@ def main():
             mu.append(mui)
             cov.append(covi)
 
-        prediction, llr = log_MVG_Classifier(DTE, LTE, mu, cov)
-        minDCF5MVG = bayes_risk(None, 0.5, True, True, llr, LTE, 100)
-        minDCF3 = bayes_risk(None, 0.4, True, True, llr, LTE, 100)
-        dcf_list5MVG.append(minDCF5MVG)
-        dcf_list3.append(minDCF3)
+        # prediction, llr = log_MVG_Classifier(DTE, LTE, mu, cov)
+        # minDCF5MVG = bayes_risk(None, 0.5, True, True, llr, LTE, 100)
+        # minDCF3 = bayes_risk(None, 0.4, True, True, llr, LTE, 100)
+        # dcf_list5MVG.append(minDCF5MVG)
+        # dcf_list3.append(minDCF3)
+
+        plotMinDCFLogReg(DTR, LTR, DTE, LTE, 0.5, [10**(-5), 10**2], 20)        
 
     print("Computed mean bayes risk (DCF) for p = 0.5: ", np.array(dcf_list5MVG).mean())
     print("Computed mean bayes risk (DCF) for p = 0.4: ", np.array(dcf_list3).mean())
