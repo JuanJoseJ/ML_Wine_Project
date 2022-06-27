@@ -4,12 +4,14 @@ from unittest import result
 import numpy as np
 from scipy import stats
 import scipy.special as sp
-from modules.dataTransform import vrow
+from modules.dataTransform import vrow, vcol, mcol
 import scipy.optimize
 import matplotlib.pyplot as plt
 '''
 This file contains all the function related to extracting characteristics from a set of data and also the models.
 '''
+
+#================================================ DENSITY FUNCTIONS =======================================
 
 def logpdf_GAU_ND(D, mu, C):
     '''
@@ -26,6 +28,35 @@ def logpdf_GAU_ND(D, mu, C):
     
     T3 = np.diag(T3)
     return T1 + T2 + T3
+
+def logpdf_GMM(X, gmm):
+    '''
+    # Overview:
+    - The ideia is to approximate each sample of X to a gaussian distribution. In order to do it, this function calls "logpdf_GAU_ND" from lab 4.
+    # Params:
+    - X = (D,N) where D is the size of a sample and N is the number of samples in X;
+    - gmm = (M, 3) where M is the number of gaussians that we are considering in the wighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]).
+    # Returns:
+    - S = Matrix of densities
+    - logdensities
+    '''
+    # Retrieving N:
+    N = X.shape[1]
+    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
+    M = len(gmm)
+    # Creating a matrix S (M,N) to store the log Gau_ND for each mu, C for each sample
+    S = []
+    for i in range (M):
+        w = gmm[i][0]
+        mu = gmm[i][1]
+        C = gmm[i][2]
+        densities = logpdf_GAU_ND(X, mu, C) # Densities is a vector where each element corresponds to log Gau for the current attribute
+        densities = densities + np.log(w)
+        S.append(densities)
+    S = np.reshape(S, (M, N)) # Joint densities matrix
+    # Now, since everything is log, need to perform a sum of the logs. This means:
+    logdens = scipy.special.logsumexp(S, axis=0) #Log marginal
+    return S, np.reshape(logdens, (1, N))
 
 #===================================================================================================
 
@@ -773,4 +804,89 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = 
         DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
         return DCF
 
-#====================================================================================================
+#============================================== GMM ======================================================
+
+def GMM_EM(X, gmm, psi, error=10**-6):
+    '''
+    ## Explanation
+    Calculates a GMM the maximizes the likelihood for the training set.    
+    ## Params
+    X is a set of attributes and gmm (Initial) is a set of [[w0,mu0,cov0],...]
+    ## Returns
+    Returns a new GMM with an improved likelihood
+    '''
+    M = len(gmm)
+    S, logdens = logpdf_GMM(X,gmm) # logDens = logMarginal
+    logGamma = S-logdens # posteriorLogProb = jointDensities - marginalDensities
+    responsability = np.exp(logGamma) # Posterior distribution (MxN). Responsability.
+    log_likelihood=None
+    newGMM = []
+    while log_likelihood is None or abs(np.average(logdens)-np.average(log_likelihood))>error:
+        newGMM = []
+        for j in range(M):
+            gamma = responsability[j,:]
+            Zg = np.sum(gamma)
+            Fg = np.sum(vrow(gamma)*X, axis=1)
+            Sg = np.dot(X, (vrow(gamma)*X).T)
+            newMu = vcol(Fg/Zg)
+            newCov = (Sg/Zg)-np.dot(newMu,newMu.T)
+            newW = Zg/X.shape[1]
+            
+            # Constraining the eigenvalues of the covariance matrices
+            U, s, _ = np.linalg.svd(newCov)
+            s[s<psi] = psi
+            newCov = np.dot(U, mcol(s)*U.T)
+                
+            newGMM.append([newW, newMu, newCov])
+        log_likelihood = logdens
+        S, logdens = logpdf_GMM(X, newGMM)
+        logGamma = np.subtract(S, logdens) # 
+        responsability = np.exp(logGamma)
+        
+    return newGMM
+
+def GMM_LBG(gmm, alpha, psi):
+    '''
+    ## Explanation
+    Given a initial guess for the GMM parameters ([w1, mu1, C1]), it can generate 2, 3, 4... Gs more, so it would become: [[w1, mu1, C1], [w2, mu2, C2], ...]
+    With the new generated G, can use it in the EM algorithm to estimate a solution for the model.
+    If it receives G, will return 2G.
+    ## Params
+    - gmm = (M, N) where M is the number of gaussians that we are considering in the wighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]).
+    - alpha = factor of multiplication
+    - psi = Lower bound to the eigenvalues of the covariance matrices (to make sure that that likelihood doesn't decrease)
+    '''
+    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
+    M = len(gmm)
+    genGMM = []
+    for i in range (M):
+        w = gmm[i][0]
+        mu = gmm[i][1]
+        C = gmm[i][2]
+        # Constraining the eigenvalues of the covariance matrices
+        # U, s, _ = np.linalg.svd(C)
+        # s[s<psi] = psi
+        # C = np.dot(U, mcol(s)*U.T)
+        # Calculating displacement vector dg:
+        U, s, Vh = np.linalg.svd(C)
+        dg = U[:, 0:1] * s[0]**0.5 * alpha
+        genGMM.append([w/2, mu + dg, C])
+        genGMM.append([w/2, mu - dg, C])
+    return genGMM
+
+def initial_gmm(DT, LT):
+    '''
+    ## Explanation:
+    This calculates the initial gmm by class for a set of data
+    ## Return:
+    A matrix of the initial GCC data of shape [[W0,M0,S0],...[Wc,Mc,Sc]]
+    '''
+    Nc = np.unique(LT).size # Number of classes
+    calcGCC = []
+    for i in range(Nc):
+        DTc = DT[:, LT==i]
+        Mc = vcol(DTc.mean(axis=1)) # Class i mean
+        Sc = empirical_cov(DTc) # Covariance of class i
+        Wc = 1
+        calcGCC.append([Wc, Mc, Sc])
+    return calcGCC

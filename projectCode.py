@@ -65,7 +65,7 @@ def main():
     nLabels = labels[0:1830]
     gaussianized_attrs = gaussianize(nAttrs)
     gaussianized_attrs_PCA = PCA(gaussianized_attrs, 10)
-    data_folds, labels_folds = k_folds(nAttrs, nLabels) # Performs a 10 kfold division
+    data_folds, labels_folds = k_folds(gaussianized_attrs_PCA, nLabels) # Performs a 10 kfold division
     dcf_list5MVG = []
     dcf_list3 = []
     for i in range(len(data_folds)):
