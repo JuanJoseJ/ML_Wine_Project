@@ -91,6 +91,12 @@ The coavariance matrix for the two classes were found not to be equal, which mea
 
 Initially, the model was run with the original unchanged data, which achived with a π=0.5 a mean DCF of 0.363 and with a π=0.4 a DCF of 0.491; for gaussianissed data we on a π=0.5 it achived a DCF of 0.328 and for a π=0.4 it got a DCF of 0.427. An improvement by the gausseanization of the data was expected as representative outliners were found, although a decrease on the prior probability for class 1, which has less samples, should improve the result, which it didnt. Finally, PCA for m=10 was used on the gausseanissed data the reduce furthermore the effect of the codependence of the attributes. For a π=0.5 an improved DCF of 0.324 was achived and with π=0.4 the DCF was 0.424.
 
+## Logistic regression models analysis
+
+### Linear logistic regression
+The formula was modified to include re-balancing of the costs (pick the formula from slides)
+
+
 # What to include in the report
 
 ## Analysis of the problem

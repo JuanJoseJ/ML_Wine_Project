@@ -1,3 +1,4 @@
+from audioop import minmax
 from math import sqrt
 from unittest import result
 import numpy as np
@@ -5,6 +6,7 @@ from scipy import stats
 import scipy.special as sp
 from modules.dataTransform import vrow
 import scipy.optimize
+import matplotlib.pyplot as plt
 '''
 This file contains all the function related to extracting characteristics from a set of data and also the models.
 '''
@@ -325,12 +327,59 @@ def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, prin
         x, f, d = scipy.optimize.fmin_l_bfgs_b(logreg_obj, startPoint, iprint = printIterations, args=(DTR, LTR, l, pit), approx_grad=True)
 
         if (verbose):
-            print("Estimated position of the minimum:\n")
+            print("Estimated position of the minimum of the expression of linear logistic regression: \n")
             print(x)
 
         predicted = posteriorLikelihood(x, DTE, verbose, LTE)
 
     return predicted
+
+def plotMinDCFLogReg(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, piTilArray = [0.5, 0.1, 0.9], verbose = False, quadratic = False):
+    '''
+    ## Explanation
+    This function calculates the logistic regression result for every lambda between max, min and resolution provided and retrieve its min DCF.\n
+    Afterwards, it plots the graph lambda x minDCF
+    Finally, it calls "posteriorLikelihood" which performs w.T x DTE and returns the result (predicted labels).
+
+    ## Params
+    - DTR = Training data.
+    - LTR = Training labels.
+    - DTE = Testing data.
+    - LTE = Testing labels.
+    - pit = Probability of class being 1 (used for unbalanced approaches). If it is 0.5, it is the standard balanced approach.
+    - minMaxLambda = lambda (Multiplier of w): list containing min and max to variate [min, max]
+    - resolution = How many values to consider for the calculated lambdas.
+    - piTilArray = Which values to test for different piTil (input for calculation of DCF). By default: [0.5, 0.1, 0.9]
+    - verbose = For debugging: Will print useful information on the terminal. By default is False
+    - quadratic = used to set if quadratic logistic regression or not
+    '''
+
+    lambdas = np.linspace(minMaxLambda[0], minMaxLambda[1], resolution)
+    minDCF = np.zeros((len(piTilArray), resolution))
+
+    maxIt = resolution*len(piTilArray)
+    currentIt = 0
+    print("number of iterations to take: ", maxIt)
+
+
+    for i in range (resolution):
+        for j in range (len(piTilArray)):
+            currentIt += 1
+            print("Current iteration = ", currentIt)
+            predicted = calculateLogReg(DTR, LTR, DTE, LTE, pit, lambdas[i], verbose, quadratic = quadratic)
+            minDCF[j][i] = bayes_risk(None, piTilArray[j], True, True, predicted, LTE)
+            print(minDCF)
+
+    plt.figure()
+    for i in range (len(piTilArray)):
+        plt.plot(lambdas, minDCF[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
+    plt.xlabel(r"values for $\lambda$")
+    plt.ylabel("DCF")
+    plt.legend()
+    plt.xscale('log')
+    plt.show()
+    plt.close()
+
 
 #====================================================================================================
 
