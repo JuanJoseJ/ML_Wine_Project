@@ -80,21 +80,28 @@ def empirical_cov(data, printMode = False):
 def pearson_correlation_coefficient(attrs, labels):
     '''
         Calculates the Pearson Correlation matrix of NxN with binary data:\n
-        The Pearson correlation coefficient is a number between -1 and 1. \n
-        In general, the correlation expresses the degree that, on an average, \n
+        The Pearson correlation coefficient is a number between -1 and 1. 
+        The correlation expresses the degree that, on an average, 
         two variables change correspondingly.\n
         
-        Returns the correlation matrix for both classes
+        Returns the correlation matrix for the raw data and for both classes
     '''
     c0 = attrs[:, labels==0]
     c1 = attrs[:, labels==1]
+    cov, _ = empirical_cov(attrs)
     cov0, _ = empirical_cov(c0)
     cov1, _ = empirical_cov(c1)
     
+    pcc = np.zeros((attrs.shape[0], attrs.shape[0]))
     pcc0 = np.zeros((attrs.shape[0], attrs.shape[0]))
     pcc1 = np.zeros((attrs.shape[0], attrs.shape[0]))
     for i in range(attrs.shape[0]):
         for j in range(attrs.shape[0]):
+            corr_i = cov[i,j]
+            div = (np.sqrt(np.var(attrs[i,:]))*np.sqrt(np.var(attrs[j,:])))
+            corr_i = np.abs(corr_i/div)
+            pcc[i,j] = corr_i
+
             corr0_i = cov0[i,j]
             div0 = (np.sqrt(np.var(c0[i,:]))*np.sqrt(np.var(c0[j,:])))
             corr0_i = np.abs(corr0_i/div0)
@@ -105,7 +112,7 @@ def pearson_correlation_coefficient(attrs, labels):
             corr1_i = np.abs(corr1_i/div1)
             pcc1[i,j] = corr1_i
     
-    return pcc0, pcc1
+    return pcc, pcc0, pcc1
 
 def calc_likehoods_ratio(data, mu, cov):
     '''
@@ -153,35 +160,147 @@ def comp_cov_matrix(attrs, labels, printMode=False):
     result = np.array_equal(cov0, cov1)
     
     if(printMode):
-        print("Is the covariance for the two classes equal?")
-        print(result)
+        print("Difference between covariances:")
+        print(abs(cov0-cov1))
     return result
 
 # ============================== Full-Cov Gaussean Classifier =================================================
 
-def log_MVG_Classifier(DT, LT, mu, cov):
+# ==================================================================================================
+def log_MVG_Classifier(DTR, LTR, DTE, prior = [1/2, 1/2]):
     '''
-        ### Params
-        - Data to classify
-        - Labels 
-        - Training data mean
-        - Training data covariance
-        ### Return
-        The function returns the predicted values for the full-cov gaussean model
-    '''
-    S = np.zeros(DT.shape[1])
-    for j in range(np.unique(LT).size):
-        ll = logpdf_GAU_ND(DT, mu[j], cov[j])
-        S = np.vstack((S, ll))
-    S = np.delete(S, 0, 0)
-    Pc = 1/np.unique(LT).size
-    logSJoint = S + np.log(Pc)
-    logSMarginal = vrow(sp.logsumexp(logSJoint, axis=0))
+    # Params
+    - DTR = Data matrix (training) where columns are the different samples and lines are the attributes of each sample. (M x N)
+    - LTR = Label matrix (training) (N,)
+    - DTE = Data testing matrix
+    - prior = Prior probability for the classes
 
-    logSPost = logSJoint-logSMarginal # Class posterior probability
-    prediction = np.argmax(logSPost, axis=0)
-    llr = logSPost[1,:] - logSPost[0, :]
-    return prediction, llr
+    # Definition
+    Calculates the mean and covariance matrix for each class empirically (used on generative models) and uses it to calculate the log-posterior probabilities for classification.
+    In this lab, there are 3 calsses (numbered from 0 to 2).
+    '''
+    # ============================================================================
+    # FIRST STEP: Calcuate the empirical mean and covariance matrix for each class
+    # ============================================================================
+    
+    # Picking samples for each class
+    D0 = DTR[:, LTR==0]
+    D1 = DTR[:, LTR==1]
+
+    # First step: Calculate mu as the mean of each attribute between all samples.
+    mu0 = vcol(D0.mean(1))
+    mu1 = vcol(D1.mean(1))
+
+    # Now it is needed to center the data, i.e., subtract mu (the mean) from all columns of D.
+    DC0 = D0 - mu0
+    DC1 = D1 - mu1
+
+    # Now, it is needed to calculate the covariance matrix C = 1/N * Dc*Dc.T
+    NTR = DTR.shape[1]
+    NTE = DTE.shape[1]
+
+    N0 = D0.shape[1]
+    C0 = (1/N0)*np.dot(DC0, np.transpose(DC0))
+
+    N1 = D1.shape[1]
+    C1 = (1/N1)*np.dot(DC1, np.transpose(DC1))
+
+    # ============================================================================
+    # SECOND STEP: Calcuate the log densities for each class and all test samples
+    # ============================================================================
+
+    # It will return a score matrix S (C, N) where C = number of classes and N = number of test samples
+
+    S = []
+    S.append(logpdf_GAU_ND(DTE, mu0, C0))
+    S.append(logpdf_GAU_ND(DTE, mu1, C1))
+    S = np.reshape(S, (2, NTE))
+
+    # ============================================================================
+    # THIRD STEP: Calcuate the log joint densities (add the score by the prior prob)
+    # ============================================================================
+
+    logSJoint = S + np.reshape(np.log(prior), (len(prior), 1))
+    
+    # ============================================================================
+    # FOURTH STEP: Calcuate the posterior probabilities
+    # ============================================================================
+
+    logSMarginal =  vrow(scipy.special.logsumexp(logSJoint, axis=0))
+    SPost = np.exp(logSJoint - logSMarginal)
+
+    # The predicted labels are obtained picking the highest probability among the classes for a given sample
+    predicted = SPost.argmax(0)
+    llr = S[1,:] - S[0, :]
+    return predicted, llr
+
+def tied_Cov_MVG(DTR, LTR, DTE, prior = [1/2, 1/2]):
+    '''
+    # Params
+    - DTR = Data matrix (training) where columns are the different samples and lines are the attributes of each sample. (M x N)
+    - LTR = Label matrix (training) (N,)
+    - DTE = Data testing matrix
+    - prior = Prior probability for the classes
+
+    # Definition
+    Calculates the mean and the tied covariance matrix empirically (used on generative models) and uses it to calculate the log-posterior probabilities for classification.
+    In this model, the covariance matrix is the same for all the classes, but the mean of each remains different for each class.
+    In this lab, there are 3 calsses (numbered from 0 to 2).
+    '''
+    # ============================================================================
+    # FIRST STEP: Calcuate the empirical mean and tied covariance matrix
+    # ============================================================================
+    
+    # Picking samples for each class
+    D0 = DTR[:, LTR==0]
+    D1 = DTR[:, LTR==1]
+
+    # First step: Calculate mu as the mean of each attribute between all samples.
+    mu0 = vcol(D0.mean(1))
+    mu1 = vcol(D1.mean(1))
+
+    # Now it is needed to center the data, i.e., subtract mu (the mean) from all columns of D.
+    DC0 = D0 - mu0
+    DC1 = D1 - mu1
+
+    # Now, it is needed to calculate the covariance matrix C = 1/N * Dc*Dc.T
+    NTR = DTR.shape[1]
+    NTE = DTE.shape[1]
+
+    C0 = np.dot(DC0, np.transpose(DC0))
+    C1 = np.dot(DC1, np.transpose(DC1))
+
+    C = (C0+C1)/NTR
+
+    # ============================================================================
+    # SECOND STEP: Calcuate the log densities for each class and all test samples
+    # ============================================================================
+
+    # It will return a score matrix S (C, N) where C = number of classes and N = number of samples
+
+    S = []
+    S.append(logpdf_GAU_ND(DTE, mu0, C))
+    S.append(logpdf_GAU_ND(DTE, mu1, C))
+    S = np.reshape(S, (2, NTE))
+
+    # ============================================================================
+    # THIRD STEP: Calcuate the log joint densities (add the score by the prior prob)
+    # ============================================================================
+
+    logSJoint = S + np.reshape(np.log(prior), (len(prior), 1))
+    
+    # ============================================================================
+    # FOURTH STEP: Calcuate the posterior probabilities
+    # ============================================================================
+
+    logSMarginal =  vrow(scipy.special.logsumexp(logSJoint, axis=0))
+    SPost = np.exp(logSJoint - logSMarginal)
+
+    # The predicted labels are obtained picking the highest probability among the classes for a given sample
+    predicted = SPost.argmax(0)
+    llr = S[1,:] - S[0, :]
+
+    return predicted, llr
 
 #================================= LOGISTIC REGRESSION ==============================================
 
@@ -210,24 +329,81 @@ def logreg_obj(v, DTR, LTR, l, pit):
     temp = l/2*np.linalg.norm(w)**2
     temp2 = 0
 
-    for i in range (n):
-        z = 2*LTR[i] - 1 # Which means: z == 1 if class == 1, z == -1 otherwise
-        if (LTR[i] == 0):
-            temp2 += (1-pit)/nf * np.logaddexp( 0, -z*(np.dot(np.transpose(w),DTR[:,i]) + b) )
-        else:
-            temp2 += pit/nt * np.logaddexp( 0, -z*(np.dot(np.transpose(w),DTR[:,i]) + b) )
-
-
+    Z = np.where(LTR > 0, 1, -1)
+    class1 = np.where(LTR > 0, 1, 0)
+    class0 = np.where(LTR > 0, 0, 1)
+    temp2 = pit/nt*np.sum(np.logaddexp(0, class1*np.multiply(-Z, np.dot(np.transpose(w),DTR) + b)))
+    temp2 += (1-pit)/nf*np.sum(np.logaddexp(0, class0*np.multiply(-Z, np.dot(np.transpose(w),DTR) + b)))
     return temp + temp2
 
-def quadlogreg_obj(v, DTR, LTR, l, pit):
+# def quadlogreg_obj(v, DTR, LTR, l, pit):
+#     '''
+#     ## Explanation
+#     This function calculates the function of quadratic logistic regression to minimize.
+#     In this project, considering that the classes are unbalanced, the function receives also pi and nt, nf (number of classes = 1, number of classes = 0)
+#     ## Params:
+
+#     - v = numpy array "(D^2 + D + 1,) = (w,b,c)" where D = dimensionality of attributes (e.g, D=4 for Iris) and the second last column is b (size D) and last column is the c (biases).\n
+#     - DTR = Training data (M,N).\n
+#     - LTR = Training labels (N,).\n
+#     - l = lambda (Multiplier of w).\n
+#     - pit = Probability of class being 1 (used for unbalanced approaches). If it is 0.5, it is the standard balanced approach.
+#     '''
+#     # Retrieving n (number of samples) and nt (number of samples of class 1)
+#     n = DTR.shape[1]
+#     nt = np.sum(LTR, 0)
+#     nf = n - nt
+
+#     # Retrieving number of attributes
+#     m = DTR.shape[0]
+
+#     # Retrieving the weights and biases
+#     w = v[0:-1]
+#     c = v[-1]
+
+#     # Calculating phi(x) = (vec(x*x.T), x)
+
+#     temp = l/2*np.linalg.norm(w)**2
+#     temp0 = 0
+#     temp1 = 0
+
+#     PHI = []
+#     PHI = np.asarray(PHI)
+
+#     for i in range (n):
+#         z = 2*LTR[i] - 1 # Which means: z == 1 if class == 1, z == -1 otherwise
+
+#         attr = np.reshape(DTR[:,i], (DTR[:,i].shape[0], 1))
+#         phi = np.dot(attr, attr.T)
+#         phi = np.hstack(phi.T)
+#         phi = np.append(phi, attr)   
+
+#         # PHI = np.append(PHI, phi)
+
+#         if (LTR[i] == 0):
+#             temp0 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
+#         else:
+#             temp1 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
+
+#     # PHI = np.reshape(PHI, (n, m*m + m)).T
+
+#     # Z = np.where(LTR > 0, 1, -1)
+#     # class1 = np.where(LTR > 0, 1, 0)
+#     # class0 = np.where(LTR > 0, 0, 1)
+#     # temp2 = pit/nt*np.sum(np.logaddexp(0, class1*np.multiply(-Z, np.dot(np.transpose(w),PHI) + c)))
+#     # temp2 += (1-pit)/nf*np.sum(np.logaddexp(0, class0*np.multiply(-Z, np.dot(np.transpose(w),PHI) + c)))
+#     return temp + ((1-pit)/nf)*temp0 + (pit/nt)*temp1
+
+#     return temp + temp2
+
+def quadlogreg_obj(v, DTR, LTR, l, pit, PHI):
     '''
     ## Explanation
     This function calculates the function of quadratic logistic regression to minimize.
     In this project, considering that the classes are unbalanced, the function receives also pi and nt, nf (number of classes = 1, number of classes = 0)
     ## Params:
 
-    - v = numpy array "(D^2 + D +1,) = (w,b,c)" where D = dimensionality of attributes (e.g, D=4 for Iris) and the second last column is b (size D) and last column is the c (biases).\n
+    - v = numpy array "(D^2 + D + 1,) = (w,b,c)" where D = dimensionality of attributes (e.g, D=4 for Iris) and the second last column is b (size D) and last column is the c (biases).\n
     - DTR = Training data (M,N).\n
     - LTR = Training labels (N,).\n
     - l = lambda (Multiplier of w).\n
@@ -238,6 +414,9 @@ def quadlogreg_obj(v, DTR, LTR, l, pit):
     nt = np.sum(LTR, 0)
     nf = n - nt
 
+    # Retrieving number of attributes
+    m = DTR.shape[0]
+
     # Retrieving the weights and biases
     w = v[0:-1]
     c = v[-1]
@@ -245,25 +424,38 @@ def quadlogreg_obj(v, DTR, LTR, l, pit):
     # Calculating phi(x) = (vec(x*x.T), x)
 
     temp = l/2*np.linalg.norm(w)**2
-    temp2 = 0
+    temp0 = 0
+    temp1 = 0
+    
+    # PHI = []
+    # PHI = np.asarray(PHI)
 
-    for i in range (n):
-        z = 2*LTR[i] - 1 # Which means: z == 1 if class == 1, z == -1 otherwise
+    # for i in range (n):
+    #     z = 2*LTR[i] - 1 # Which means: z == 1 if class == 1, z == -1 otherwise
 
-        attr = np.reshape(DTR[:,i], (DTR[:,i].shape[0], 1))
-        phi = np.dot(attr, attr.T)
-        phi = np.hstack(phi.T)
-        phi = np.append(phi, attr)
+    #     attr = np.reshape(DTR[:,i], (DTR[:,i].shape[0], 1))
+    #     phi = np.dot(attr, attr.T)
+    #     phi = np.hstack(phi.T)
+    #     phi = np.append(phi, attr)
 
-        if (LTR[i] == 0):
-            temp2 += (1-pit)/nf * np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
-        else:
-            temp2 += pit/nt * np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
+    #     # PHI = np.append(PHI, phi)
 
+    #     if (LTR[i] == 0):
+    #         temp0 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
+    #     else:
+    #         temp1 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
 
+    # PHI = np.reshape(PHI, (n, m*m + m)).T
+
+    Z = np.where(LTR > 0, 1, -1)
+    class1 = np.where(LTR > 0, 1, 0)
+    class0 = np.where(LTR > 0, 0, 1)
+    temp2 = pit/nt*np.sum(np.logaddexp(0, class1*np.multiply(-Z, np.dot(np.transpose(w),PHI) + c)))
+    temp2 += (1-pit)/nf*np.sum(np.logaddexp(0, class0*np.multiply(-Z, np.dot(np.transpose(w),PHI) + c)))
+    # return temp + ((1-pit)/nf)*temp0 + (pit/nt)*temp1
     return temp + temp2
 
-def posteriorLikelihood(v, DTE, printStats = False, LTE = None, quadratic = False):
+def posteriorLikelihood(v, DTE, printStats = False, LTE = None, quadratic = False, returnScores = False, PHI = None):
     '''
     ## Params:
     - v = numpy array "(D+1,) = (w,b)" where D = dimensionality of attributes (e.g, D=4 for Iris) and the last column is the b (biases). If want to calculate the quadratic form: v = (D^2 + b)\n
@@ -271,9 +463,10 @@ def posteriorLikelihood(v, DTE, printStats = False, LTE = None, quadratic = Fals
     - printStats = Verbose mode for the estimation: Show percentage of correctly assigned classes\n
     - LTE = Only used if printStats == True: LTE is the correct label array\n
     - quadratic = if want to calculate the predicted array for quadratic form of logistic regression
+    - returnScores = Set to true if want to return the scores and not the predicted array (0,0,1,1...)
 
     ## Return:
-    Array of predicted labels (0, 0, 1, ...)
+    Array of predicted labels (0, 0, 1, ...) or scores (1.34, -1.5, ---)
     '''
     # Retrieving weight
     w = v[0:-1]
@@ -282,32 +475,42 @@ def posteriorLikelihood(v, DTE, printStats = False, LTE = None, quadratic = Fals
     n = DTE.shape[1]
 
     if(quadratic):
+        # c = v[-1]
+        # predicted = np.zeros((n,))
+        # for i in range (n):
+        #     attr = np.reshape(DTE[:,i], (DTE[:,i].shape[0], 1))
+        #     phi = np.dot(attr, attr.T)
+        #     phi = np.hstack(phi.T)
+        #     phi = np.append(phi, attr)
+
+        #     temp = np.dot(np.transpose(w), phi) + c
+
+        #     if (temp > 0):
+        #         predicted[i] = 1
+        #     else:
+        #         predicted[i] = 0
         c = v[-1]
-        predicted = np.zeros((n,))
-        for i in range (n):
-            attr = np.reshape(DTE[:,i], (DTE[:,i].shape[0], 1))
-            phi = np.dot(attr, attr.T)
-            phi = np.hstack(phi.T)
-            phi = np.append(phi, attr)
+        predicted = np.dot(np.transpose(w), PHI) + c # Equivalent to likelihood
+        if(returnScores == False):
 
-            temp = np.dot(np.transpose(w), phi) + c
-
-            if (temp > 0):
-                predicted[i] = 1
-            else:
-                predicted[i] = 0
+            for i in range (predicted.shape[0]):
+                if (predicted[i] > 0):
+                    predicted[i] = 1
+                else:
+                    predicted[i] = 0
        
     else:
         b = v[-1]
         predicted = np.dot(np.transpose(w), DTE) + b # Equivalent to likelihood
+        if(returnScores == False):
 
-        for i in range (predicted.shape[0]):
-            if (predicted[i] > 0):
-                predicted[i] = 1
-            else:
-                predicted[i] = 0
+            for i in range (predicted.shape[0]):
+                if (predicted[i] > 0):
+                    predicted[i] = 1
+                else:
+                    predicted[i] = 0
 
-    if(printStats == True):
+    if(printStats == True and returnScores == False):
 
         print("======================== LOGISTIC REGRESSION PREDICTION VERBOSE MODE ===============================")
         print("Obtained prediction array:\n")
@@ -321,7 +524,27 @@ def posteriorLikelihood(v, DTE, printStats = False, LTE = None, quadratic = Fals
 
     return predicted
 
-def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, printIterations = False, quadratic = False):
+def calculatePHI(DTR):
+    '''
+    
+    '''
+    
+    # Number of samples n
+    n = DTR.shape[1]
+    
+    PHI = np.zeros((DTR.shape[0]**2 + DTR.shape[0], 0))
+
+    for i in range (n):
+
+        attr = np.reshape(DTR[:,i], (DTR[:,i].shape[0], 1))
+        phi = np.dot(attr, attr.T)
+        phi = np.hstack(phi.T)
+        phi = np.append(phi, attr)
+        phi = np.reshape(phi, (phi.shape[0], 1))
+        PHI = np.hstack((PHI, phi))
+    return PHI
+
+def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, printIterations = False, quadratic = False, returnScores = False):
     '''
     ## Explanation
     This function calculates the logistic regression result and returns the array of predicted labels.\n
@@ -345,13 +568,16 @@ def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, prin
         D = DTR.shape[0]
         # Generating starting point
         startPoint = np.zeros(D**2 + D + 1)
-        x, f, d = scipy.optimize.fmin_l_bfgs_b(quadlogreg_obj, startPoint, iprint = printIterations, args=(DTR, LTR, l, pit), approx_grad=True)
+        PHI = calculatePHI(DTR)
+
+        x, f, d = scipy.optimize.fmin_l_bfgs_b(quadlogreg_obj, startPoint, iprint = printIterations, args=(DTR, LTR, l, pit, PHI), approx_grad=True)
 
         if (verbose):
             print("Estimated position of the minimum:\n")
             print(x)
 
-        predicted = posteriorLikelihood(x, DTE, verbose, LTE, True)
+        PHI = calculatePHI(DTE)
+        predicted = posteriorLikelihood(x, DTE, verbose, LTE, True, returnScores=returnScores, PHI=PHI)
 
     else:
         startPoint = np.zeros(DTR.shape[0] + 1)
@@ -361,11 +587,11 @@ def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, prin
             print("Estimated position of the minimum of the expression of linear logistic regression: \n")
             print(x)
 
-        predicted = posteriorLikelihood(x, DTE, verbose, LTE)
+        predicted = posteriorLikelihood(x, DTE, verbose, LTE, returnScores=returnScores)
 
     return predicted
 
-def plotMinDCFLogReg(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, piTilArray = [0.5, 0.1, 0.9], verbose = False, quadratic = False):
+def plotMinDCFLogReg(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, piTilArray = [0.5, 0.1, 0.9], verbose = False, quadratic = False, plot = False):
     '''
     ## Explanation
     This function calculates the logistic regression result for every lambda between max, min and resolution provided and retrieve its min DCF.\n
@@ -378,14 +604,16 @@ def plotMinDCFLogReg(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, piTilArr
     - DTE = Testing data.
     - LTE = Testing labels.
     - pit = Probability of class being 1 (used for unbalanced approaches). If it is 0.5, it is the standard balanced approach.
-    - minMaxLambda = lambda (Multiplier of w): list containing min and max to variate [min, max]
+    - minMaxLambda = lambda power (Multiplier of w): list containing min and max of the power of 10 [min, max] = 10**min, 10**max
     - resolution = How many values to consider for the calculated lambdas.
     - piTilArray = Which values to test for different piTil (input for calculation of DCF). By default: [0.5, 0.1, 0.9]
     - verbose = For debugging: Will print useful information on the terminal. By default is False
     - quadratic = used to set if quadratic logistic regression or not
+    - plot = If it is true, plot the minDCF right away. If it is false, just returns the array of DCFs (len(piTilArray) x resolution)
     '''
 
-    lambdas = np.linspace(minMaxLambda[0], minMaxLambda[1], resolution)
+    lambdas = np.logspace(minMaxLambda[0], minMaxLambda[1], resolution)
+    print("Lambdas = ", lambdas)
     minDCF = np.zeros((len(piTilArray), resolution))
 
     maxIt = resolution*len(piTilArray)
@@ -397,19 +625,50 @@ def plotMinDCFLogReg(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, piTilArr
         for j in range (len(piTilArray)):
             currentIt += 1
             print("Current iteration = ", currentIt)
-            predicted = calculateLogReg(DTR, LTR, DTE, LTE, pit, lambdas[i], verbose, quadratic = quadratic)
+            predicted = calculateLogReg(DTR, LTR, DTE, LTE, pit, lambdas[i], verbose, quadratic = quadratic, returnScores = True)
             minDCF[j][i] = bayes_risk(None, piTilArray[j], True, True, predicted, LTE)
             print(minDCF)
 
-    plt.figure()
-    for i in range (len(piTilArray)):
-        plt.plot(lambdas, minDCF[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
-    plt.xlabel(r"values for $\lambda$")
-    plt.ylabel("DCF")
-    plt.legend()
-    plt.xscale('log')
-    plt.show()
-    plt.close()
+
+    if (plot):
+        plt.figure()
+        for i in range (len(piTilArray)):
+            plt.plot(lambdas, minDCF[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
+        plt.xlabel(r"values for $\lambda$")
+        plt.ylabel("DCF")
+        plt.legend()
+        plt.xscale('log')
+        plt.show()
+        plt.close()
+    else:
+        return minDCF
+
+def calcLogRegInLambdaRange(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, verbose = False, quadratic = False):
+    '''
+    ## Explanation
+    The ideia is to calculate for each lambda the predicted array of labels. This is used to plot the graphs for the minDCF.
+
+    ## Returns
+    A matrix "predictions" where number of lines = number of different lambdas considered +1 (the correct labels) and number of columns = number of predicted samples
+    '''
+    lambdas = np.logspace(minMaxLambda[0], minMaxLambda[1], resolution)
+    predictions = np.zeros((resolution, LTE.shape[0]))
+    # print("Lambdas = ", lambdas)
+    # minDCF = np.zeros((len(piTilArray), resolution))
+
+    maxIt = resolution
+    currentIt = 0
+    print("number of iterations to take: ", maxIt)
+
+
+    for i in range (resolution): 
+        currentIt += 1
+        print("Current iteration = ", currentIt)
+        predicted = calculateLogReg(DTR, LTR, DTE, LTE, pit, lambdas[i], verbose, quadratic = quadratic, returnScores = True)
+        predictions[i, :] = predicted
+
+    predictions = np.vstack((predictions, LTE))
+    return predictions
 
 
 #====================================================================================================
@@ -518,7 +777,7 @@ def minDualSVM(alpha, H, test = None):
 
     return LD, gradient
 
-def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = True, gamma = 1):
+def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = True, gamma = 1, returnScores = False, piT = 0.5, useRebalancing = False):
     '''
     ## Explanation
     This functions uses "scipy.optimize.fmin_l_bfgs_b" to minimize L^D. It calls "linearSVM_H" retrieving H which will be used then by function "minDualSVM" to be minimized.
@@ -549,10 +808,27 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
     param = np.zeros((1, n))
     z = np.zeros((n,1))
 
-    for i in range (n):
-        bounds.append((0, C))
-        z[i][0] = 2*LTR[i] - 1
-        param[0][i] = K
+    if (useRebalancing):
+        empPiT = np.sum(LTR)
+        empPiT = empPiT/n
+        empPiF = 1 - empPiT
+        piF = 1 - piT
+
+        for i in range (n):
+
+            z[i][0] = 2*LTR[i] - 1
+            param[0][i] = K
+
+            if(LTR[i] == 1):
+                bounds.append((0, C*(piT/empPiT)))
+            else:
+                bounds.append((0, C*(piF/empPiF)))
+
+    else:
+        for i in range (n):
+            bounds.append((0, C))
+            z[i][0] = 2*LTR[i] - 1
+            param[0][i] = K
 
     extD = np.append(DTR, param, 0) # Extended data matrix
 
@@ -596,13 +872,14 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
             for j in range(n):
                 predicted[i] += alpha[j]*z[j][0]*RBFkernel(DTR[:, j],DTE[:, i], gamma, K**2)
 
-    for i in range (predicted.shape[0]):
-        if (predicted[i] > 0):
-            predicted[i] = 1
-        else:
-            predicted[i] = 0
+    if (returnScores==False):
+        for i in range (predicted.shape[0]):
+            if (predicted[i] > 0):
+                predicted[i] = 1
+            else:
+                predicted[i] = 0
 
-    if (verbose and linear):
+    if (verbose and linear and returnScores == False):
         print("======================== LINEAR SVM PREDICTION VERBOSE MODE ===============================")
         print("Obtained prediction of classes:\n")
         print(predicted)
@@ -618,7 +895,7 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
         loss, _ = minDualSVM(x, H)
         print("Loss = ", loss)
 
-    elif(verbose):
+    elif(verbose and returnScores == False):
         print("===================== NON - LINEAR SVM PREDICTION VERBOSE MODE ============================")
         print("Obtained prediction of classes:\n")
         print(predicted)
@@ -662,7 +939,7 @@ def dualityGap(w, C, z, extD, LD):
 
 #=========================== Confusion matrix and detection costs ===================================
 
-def confusionMatrix(prediction, correct):
+def confusionMatrix(prediction, correct, printStatus = False, useThreshold = False):
     '''
     ## Params:
     - prediction = List of predicted classes (assumed to be an 1 dim np array)
@@ -674,14 +951,23 @@ def confusionMatrix(prediction, correct):
     # Creating empty confusion matrix
     confMatrix = np.zeros((2, 2))
 
+    if (useThreshold):
+        prediction = np.where(prediction > 0, 1, 0)
+
     # Casting prediction to be integers
     prediction = prediction.astype(int)
     correct = correct.astype(int)
 
     for i in range (prediction.shape[0]):
-        # print("AAAAAAAAAAAA", prediction.shape[0])
-        # print("BBBBBBBBBBBB", correct.shape[0])
         confMatrix[prediction[i]][correct[i]] += 1
+    
+    if (printStatus):
+        print("Percentage of correctly assigned classes:\n")
+        correctClasses = 0
+        for i in range (prediction.shape[0]):
+            if (prediction[i] == correct[i]):
+                correctClasses +=1
+        print( 100*(correctClasses/correct.shape[0]), "%" )
 
     return confMatrix
 
@@ -709,8 +995,8 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = 
 
     scores = scores.astype(float)
     scoresEval = scores
-    scoresEval = np.insert(scores, 0, -np.inf)
-    scoresEval = np.insert(scores, len(scores), np.inf)
+    # scoresEval = np.insert(scores, 0, -np.inf)
+    # scoresEval = np.insert(scores, len(scores), np.inf)
 
     if (minimum and normalized): # This is the minimum that the system can achieve given piTil
 

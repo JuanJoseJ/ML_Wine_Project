@@ -37,10 +37,11 @@ def plotInitialData (D, classes, histogramMode = True, scatterMode = False, prin
         for i in range (len(attrList)):
             plt.figure()
             plt.xlabel(attrList[i])
-            plt.hist(D0[i, :], bins = 10, density = True, alpha = 0.4, label = "bad wines")
-            plt.hist(D1[i, :], bins = 10, density = True, alpha = 0.4, label = "good wines")
+            plt.hist(D0[i, :], bins = 30, density = True, alpha = 0.4, label = "bad wines")
+            plt.hist(D1[i, :], bins = 30, density = True, alpha = 0.4, label = "good wines")
             plt.legend()
             plt.tight_layout()
+            # plt.savefig('images/gaussianized/' + attrList[i] + '.png')
         plt.show()
 
     if (scatterMode):
@@ -90,7 +91,7 @@ def plotEstimDensityAllRows(D):
         plt.plot(XPlot.ravel(), np.exp(logpdf_GAU_ND(vrow(XPlot), mu, cov)))
     plt.show()
     
-def plotCorrelationHeatMap(matrix):
+def plotCorrelationHeatMap(raw, class1, class2):
     '''
         Plots a heat map to analize the correlation between attributes
     '''
@@ -108,11 +109,28 @@ def plotCorrelationHeatMap(matrix):
         "alcohol"]
     # plt.figure()
     fig, ax = plt.subplots()
-    heatmap = ax.pcolor(matrix)
-    plt.colorbar(heatmap)
-    ax.set_xticks(np.arange(len(attrList)), labels=attrList)
-    ax.set_yticks(np.arange(len(attrList)), labels=attrList)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
+    heatmap = ax.imshow(raw, vmin=-1, vmax=1, cmap='inferno')
+    fig.colorbar(heatmap)
+    # ax.set_xticks(np.arange(len(attrList)), labels=attrList)
+    # ax.set_yticks(np.arange(len(attrList)), labels=attrList)
+    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
+    plt.xlabel("Raw Data")
+
+    fig1, ax1 = plt.subplots()
+    heatmap1 = ax1.imshow(class1, vmin=-1, vmax=1, cmap='RdBu')
+    fig1.colorbar(heatmap1)
+    # ax.set_xticks(np.arange(len(attrList)), labels=attrList)
+    # ax.set_yticks(np.arange(len(attrList)), labels=attrList)
+    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
+    plt.xlabel("Class One")
+
+    fig2, ax2 = plt.subplots()
+    heatmap2 = ax2.imshow(class2, vmin=-1, vmax=1, cmap='YlGn')
+    fig2.colorbar(heatmap2)
+    # ax.set_xticks(np.arange(len(attrList)), labels=attrList)
+    # ax.set_yticks(np.arange(len(attrList)), labels=attrList)
+    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
+    plt.xlabel("Class Two")
 
     # plt.imshow(matrix, cmap='hot', interpolation='nearest')
     plt.show()

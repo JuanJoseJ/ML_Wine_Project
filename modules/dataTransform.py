@@ -43,13 +43,14 @@ def normalize(data, printMode = False):
     
     return normData
 
-def gaussianize(attr, printStatus = False):
+def gaussianize(attr, otherComparator = None, printStatus = False):
     '''
     ## Explanation
     It calculates the ranking function of each sample and the percent point function for the training dataset.
 
     ## Parameters
     - attr = matrix of the attributes (MxN) (ONLY FOR TRAINING)
+    - otherComparator = if want to use other matrix to compute the ranking on (for the gaussianization of the testing set, it must be used to be compared with the training set)
     - printStatus = if it is true, print the percentage of conclusion
 
     ## Return
@@ -58,15 +59,19 @@ def gaussianize(attr, printStatus = False):
 
     # Retrieving number of attributes and number of samples
     M = attr.shape[0]
-    N = attr.shape[1]
+    if(otherComparator is not None):
+        N = otherComparator.shape[1]
+    else:
+        N = attr.shape[1]
+
 
     # Initialize the rank and gaussianized arrays
-    rank = np.zeros((M, N))
-    gaussianized = np.zeros((M, N))
+    rank = np.zeros((M, attr.shape[1]))
+    gaussianized = np.zeros((M, attr.shape[1]))
 
     # Number of times to perform loop (for printing mode only)
     if (printStatus):
-        loops = M*N
+        loops = M*attr.shape[1]
         loopFrac = loops//100
         loopCount = 0
         percentage = 0
@@ -74,17 +79,20 @@ def gaussianize(attr, printStatus = False):
         addAst = "[****************************************************************************************************]"
 
     for i in range (M):
-        for j in range (N):
+        row = attr[i, :]
+        for j in range (len(row)):
 
-            value = attr[i][j]
+            value = row[j]
             sum = 0
 
-            for k in range (N):
-                if (attr[i][k] < value):
-                    sum += 1
+            if (otherComparator is not None):
+                sum = np.int32(value < otherComparator[i, :]).sum()
+            else:
+                sum = np.int32(value < row).sum()
             
             sum += 1
             rank[i][j] = sum/(N+2)
+            # print(sum/(N+2))
             gaussianized[i][j] = scipy.stats.norm.ppf(rank[i][j])
 
             if (printStatus):
