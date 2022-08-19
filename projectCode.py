@@ -565,7 +565,6 @@ def k_fold(D, L, k, choice):
 def main():
     attrs, labels = load('./Train.txt')
     choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n"))
-
     if (choice==1): # Plot original data
         plotInitialData(attrs, labels)
         
@@ -624,8 +623,6 @@ def main():
 
     else:
         print("Invalid number")
-
-    # Remember to do the shuffling ----------------------- !!!
     
 
 if __name__ == '__main__':
