@@ -75,7 +75,7 @@ def main():
 
     # ================ SVM =====================
     # C = 2
-    # predicted = calculateSVM(DTR, LTR, C, DTE, LTE, verbose = False, linear=False, K = 0, gamma = np.exp(-2))
+    predicted = calculateSVM(DTR, LTR, C, DTE, LTE, verbose = False, linear=False, K = 0, gamma = np.exp(-2))
     # print(predicted)
     # confMat = confusionMatrix(predicted, LTE)
     # mu, covMatrix = calc_mu_cov(DTE, LTE)

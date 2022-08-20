@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize, k_folds, PCA
 from modules.dataLoad import load, split_db_2to1
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calcLogRegInLambdaRange, calculateSVM, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, tied_Cov_MVG, plotMinDCFLogReg, logpdf_GMM, initial_gmm, GMM_EM, GMM_LBG
+from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calcLogRegInLambdaRange, calculateSVM, calcSVMInCRange, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, tied_Cov_MVG, plotMinDCFLogReg, logpdf_GMM, initial_gmm, GMM_EM, GMM_LBG
 from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
 
 
@@ -561,10 +561,66 @@ def k_fold(D, L, k, choice):
         print("For pit = 0.1:", finalMinDCFArray[1])
         print("For pit = 0.9:", finalMinDCFArray[2])
 
+    elif(int(choice)==7): # Plots for the linear SVM
+        resolution = 15
+        minMaxC = [-3, 1]
+        Cs = np.logspace(minMaxC[0], minMaxC[1], resolution)
+        piTilArray = [0.5, 0.1, 0.9]
+
+        predictions = np.zeros((resolution+1, 0))
+        finalMinDCFArray = np.zeros((3, resolution))
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            if(choice==7.1):
+                predictions = np.hstack((predictions, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution)))
+
+            elif(choice==7.2):
+                predictions = np.hstack((predictions, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, useRebalancing=True)))
+
+            elif(choice==7.3):
+                DTE = gaussianize(DTE, DTR)
+                DTR = gaussianize(DTR)
+                predictions = np.hstack((predictions, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution)))
+
+            elif(choice==7.4):
+                DTE = gaussianize(DTE, DTR)
+                DTR = gaussianize(DTR)
+                predictions = np.hstack((predictions, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, useRebalancing=True)))
+
+            
+            print("Fold number ", i, " done...")
+        
+        for i in range (resolution):
+            for j in range (len(piTilArray)):
+                finalMinDCFArray[j][i] = bayes_risk(None, piTilArray[j], True, True, predictions[i, :], predictions[-1, :])
+            
+            print("calculation ", i, " out of ", resolution)
+
+        plt.figure()
+        for i in range (3): # 3 values of pitil being considered
+            plt.plot(Cs, finalMinDCFArray[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
+        plt.xlabel(r"values for $\lambda$")
+        plt.ylabel("DCF")
+        plt.legend()
+        plt.xscale('log')
+        plt.show()
+        plt.close()
 
 def main():
     attrs, labels = load('./Train.txt')
-    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n"))
+    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n"))
     if (choice==1): # Plot original data
         plotInitialData(attrs, labels)
         
@@ -610,7 +666,7 @@ def main():
         elif(choice2==4): # plot minDCF with gaussianization
             k_fold(attrs, labels, 5, 5.4)
             
-    elif(choice==6):
+    elif(choice==6): # Quadratic logistic regression
         choice2 = int(input("Type:\n -1 to plot minDCF without gaussianization\n -2 to plot minDCF with gaussianization\n -3 for quad log reg without gaussianization\n -4 for quad log reg with gaussianization\n"))
         if(choice2==1): # plot minDCF without gaussianization
             k_fold(attrs, labels, 5, 6.1)
@@ -620,6 +676,17 @@ def main():
             k_fold(attrs, labels, 5, 6.3)
         elif(choice2==4):
             k_fold(attrs, labels, 5, 6.4)
+    
+    elif(choice==7):
+        choice2 = int(input("Type:\n -1 to plot minDCF without gaussianization and without balancing\n -2 to plot minDCF without gaussianization and with balancing\n -3 to plot minDCF with gaussianization and without balancing\n -4 to plot minDCF with gaussianization and with balancing\n"))
+        if(choice2==1): # plot minDCF without gaussianization and without balancing
+            k_fold(attrs, labels, 5, 7.1)
+        elif(choice2==2): # plot minDCF without gaussianization and with balancing
+            k_fold(attrs, labels, 5, 7.2)
+        elif(choice2==3): # plot minDCF with gaussianization and without balancing
+            k_fold(attrs, labels, 5, 7.3)
+        elif(choice2==4): # plot minDCF with gaussianization and with balancing
+            k_fold(attrs, labels, 5, 7.4)
 
     else:
         print("Invalid number")

@@ -674,6 +674,33 @@ def calcLogRegInLambdaRange(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, v
 #====================================================================================================
 
 #============================================= SVM ==================================================
+def calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution,  K = 1, verbose = False, linear = True, gamma = 1, piT = 0.5, useRebalancing = False):
+    '''
+    ## Explanation
+    The ideia is to calculate for each C the predicted array of labels. This is used to plot the graphs for the minDCF.
+
+    ## Returns
+    A matrix "predictions" where number of lines = number of different lambdas considered +1 (the correct labels) and number of columns = number of predicted samples
+    '''
+    Cs = np.logspace(minMaxC[0], minMaxC[1], resolution)
+    predictions = np.zeros((resolution, LTE.shape[0]))
+    # print("Lambdas = ", lambdas)
+    # minDCF = np.zeros((len(piTilArray), resolution))
+
+    maxIt = resolution
+    currentIt = 0
+    print("number of iterations to take: ", maxIt)
+
+
+    for i in range (resolution): 
+        currentIt += 1
+        print("Current iteration = ", currentIt)
+        predicted = calculateSVM(DTR, LTR, Cs[i],DTE, LTE,  K, verbose, linear, gamma, True, piT, useRebalancing) # Return scores always true
+        predictions[i, :] = predicted
+
+    predictions = np.vstack((predictions, LTE))
+    return predictions
+
 def linearSVM_H(DTR, LTR, K = 1):
     '''
     ## Explanation
@@ -777,7 +804,7 @@ def minDualSVM(alpha, H, test = None):
 
     return LD, gradient
 
-def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = True, gamma = 1, returnScores = False, piT = 0.5, useRebalancing = False):
+def  calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = True, gamma = 1, returnScores = False, piT = 0.5, useRebalancing = False):
     '''
     ## Explanation
     This functions uses "scipy.optimize.fmin_l_bfgs_b" to minimize L^D. It calls "linearSVM_H" retrieving H which will be used then by function "minDualSVM" to be minimized.
@@ -792,6 +819,8 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
     - K = Parameter used to build the extended matrix. Increasing this number may lead to better decisions, but makes the dual problem harder to solve
     - linear = If set to False, it will use the RBF kernel function to calculate it 
     - gamma = Only used if non linear. It is a hyperparameter used on the calculation of kernel function
+    - piT = 
+    - useRebalancing = 
     '''
     
     # FIRST PART: Dual solution calculation ------------------------------------------------------------------------------
@@ -841,7 +870,7 @@ def calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = 
 
     # Calculating the minimum
     x,f,d = scipy.optimize.fmin_l_bfgs_b(minDualSVM, startPoint, args = (H, 1), bounds=bounds, iprint = verbose, approx_grad = False, factr=1.0)
-    # HAVE TO PASS AT LEAST 2 ARGUMENTS OTHERWISE THIS STUPID FUNCTION DOESNT WORK"
+    # HAVE TO PASS AT LEAST 2 ARGUMENTS OTHERWISE THIS FUNCTION DOESNT WORK"
 
     # SECOND PART ------------------------------------------------------------------------------------------------------------
     if(linear):
