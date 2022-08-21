@@ -724,9 +724,65 @@ def k_fold(D, L, k, choice):
         plt.show()
         plt.close()
 
+    elif(choice==10): # quad SVM with gaussianization
+        C = 10**(0)
+
+        finalMinDCFArray = np.zeros((2, 3))
+
+        dcf_list5 = np.zeros((2, 1))
+        dcf_list1 = np.zeros((2, 1))
+        dcf_list9 = np.zeros((2, 1))
+
+        resultsForUnbalanced = np.zeros((2, 0))
+        resultsForBalanced = np.zeros((2, 0))
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            DTE = gaussianize(DTE, DTR)
+            DTR = gaussianize(DTR)
+
+            # For unbalanced SVM
+            predicted = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, RBF=False, linear=False)
+            temp = np.vstack((predicted, LTE))
+            resultsForUnbalanced = np.hstack((resultsForUnbalanced, temp))
+
+            # For balanced SVM
+            predicted = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, useRebalancing=True, RBF=False, linear=False)
+            temp = np.vstack((predicted, LTE))
+            resultsForBalanced = np.hstack((resultsForBalanced, temp))
+            
+            
+            print("Fold number ", i)
+
+        dcf_list5[0][0] = bayes_risk(None, 0.5, True, True, resultsForUnbalanced[0, :], resultsForUnbalanced[1, :])
+        dcf_list5[1][0] = bayes_risk(None, 0.5, True, True, resultsForBalanced[0, :], resultsForBalanced[1, :])
+
+        dcf_list1[0][0] = bayes_risk(None, 0.1, True, True, resultsForUnbalanced[0, :], resultsForUnbalanced[1, :])
+        dcf_list1[1][0] = bayes_risk(None, 0.1, True, True, resultsForBalanced[0, :], resultsForBalanced[1, :])
+
+        dcf_list9[0][0] = bayes_risk(None, 0.9, True, True, resultsForUnbalanced[0, :], resultsForUnbalanced[1, :])
+        dcf_list9[1][0] = bayes_risk(None, 0.9, True, True, resultsForBalanced[0, :], resultsForBalanced[1, :])
+        
+        finalMinDCFArray = np.hstack((dcf_list5, dcf_list1))
+        finalMinDCFArray = np.hstack((finalMinDCFArray, dcf_list9))
+        print("final DCFs for quadratic SVM:")
+        print("For Unbalanced:", finalMinDCFArray[0])
+        print("For Balanced:", finalMinDCFArray[1])
+
 def main():
     attrs, labels = load('./Train.txt')
-    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n"))
+    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n -10 for quad SVM\n"))
     if (choice==1): # Plot original data
         plotInitialData(attrs, labels)
         
@@ -803,6 +859,9 @@ def main():
             k_fold(attrs, labels, 5, 9.1)
         elif(choice2==2): # plot minDCF with gaussianization and with balancing
             k_fold(attrs, labels, 5, 9.2)
+
+    elif(choice==10):
+            k_fold(attrs, labels, 5, 10)
 
     else:
         print("Invalid number")

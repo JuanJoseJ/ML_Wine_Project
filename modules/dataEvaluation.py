@@ -795,7 +795,6 @@ def quadraticKernel(xi, xj, bias, c=1):
     ## Params
     - xi and xj = samples (M,) where M is the number of features considered for each sample
     - bias = If want to add a regularized bias on the kernel function
-
     '''
 
     quadratic = (np.dot(xi.T, xj) + c)**2 + bias
@@ -919,10 +918,15 @@ def  calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear =
         predicted = np.zeros((nt,))
         alpha = np.reshape(x, (n,))
 
-        for i in range(nt):
-            for j in range(n):
-                predicted[i] += alpha[j]*z[j][0]*RBFkernel(DTR[:, j],DTE[:, i], gamma, K**2)
-
+        if(RBF):
+            for i in range(nt):
+                for j in range(n):
+                    predicted[i] += alpha[j]*z[j][0]*RBFkernel(DTR[:, j],DTE[:, i], gamma, K**2)
+        else:
+            for i in range(nt):
+                for j in range(n):
+                    predicted[i] += alpha[j]*z[j][0]*quadraticKernel(DTR[:, j],DTE[:, i], K**2, c=1)
+                    
     if (returnScores==False):
         for i in range (predicted.shape[0]):
             if (predicted[i] > 0):
