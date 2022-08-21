@@ -674,7 +674,7 @@ def calcLogRegInLambdaRange(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, v
 #====================================================================================================
 
 #============================================= SVM ==================================================
-def calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution,  K = 1, verbose = False, linear = True, gamma = 1, piT = 0.5, useRebalancing = False):
+def calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution,  K = 1, verbose = False, linear = True, gamma = 1, piT = 0.5, useRebalancing = False, RBF = False):
     '''
     ## Explanation
     The ideia is to calculate for each C the predicted array of labels. This is used to plot the graphs for the minDCF.
@@ -695,7 +695,7 @@ def calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution,  K = 1, verbose = F
     for i in range (resolution): 
         currentIt += 1
         print("Current iteration = ", currentIt)
-        predicted = calculateSVM(DTR, LTR, Cs[i],DTE, LTE,  K, verbose, linear, gamma, True, piT, useRebalancing) # Return scores always true
+        predicted = calculateSVM(DTR, LTR, Cs[i],DTE, LTE,  K, verbose, linear, gamma, True, piT, useRebalancing, RBF = RBF) # Return scores always true
         predictions[i, :] = predicted
 
     predictions = np.vstack((predictions, LTE))
@@ -733,7 +733,7 @@ def linearSVM_H(DTR, LTR, K = 1):
 
     return H
 
-def kernelSVM_H(DTR, LTR, gamma, K = 0):
+def kernelSVM_H(DTR, LTR, gamma, K = 0, RBF=False):
     '''
     ## Explanation
     Function that calculates non linear SVM using a kernel function k(xi, xj).
@@ -756,9 +756,15 @@ def kernelSVM_H(DTR, LTR, gamma, K = 0):
 
     # Computing H: First, will calculate G = k(xi, xj) and then multiply by zi*zj
     G  = np.zeros((n,n))
-    for i in range (n):
-        for j in range (n):
-            G[i][j] = RBFkernel(DTR[:, i], DTR[:, j], gamma, K**2)
+
+    if(RBF==False):
+        for i in range (n):
+            for j in range (n):
+                G[i][j] = quadraticKernel(DTR[:, i], DTR[:, j], K**2)
+    else:
+        for i in range (n):
+            for j in range (n):
+                G[i][j] = RBFkernel(DTR[:, i], DTR[:, j], gamma, K**2)
 
     zizj = z.reshape((n, 1))
     zizj = np.dot(zizj, zizj.T)
@@ -780,6 +786,20 @@ def RBFkernel(xi, xj, gamma, bias):
 
     RBF = np.exp( -gamma*(np.linalg.norm(xi - xj)**2) ) + bias
     return RBF
+
+def quadraticKernel(xi, xj, bias, c=1):
+    '''
+    ## Explanation
+    Radial Basis Function kernel: k(x1, x2) = (x1.T*x2 + c)^2 + bias
+
+    ## Params
+    - xi and xj = samples (M,) where M is the number of features considered for each sample
+    - bias = If want to add a regularized bias on the kernel function
+
+    '''
+
+    quadratic = (np.dot(xi.T, xj) + c)**2 + bias
+    return quadratic
 
 def minDualSVM(alpha, H, test = None):
     '''
@@ -804,7 +824,7 @@ def minDualSVM(alpha, H, test = None):
 
     return LD, gradient
 
-def  calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = True, gamma = 1, returnScores = False, piT = 0.5, useRebalancing = False):
+def  calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear = True, gamma = 1, returnScores = False, piT = 0.5, useRebalancing = False, RBF=False):
     '''
     ## Explanation
     This functions uses "scipy.optimize.fmin_l_bfgs_b" to minimize L^D. It calls "linearSVM_H" retrieving H which will be used then by function "minDualSVM" to be minimized.
@@ -864,8 +884,10 @@ def  calculateSVM(DTR, LTR, C, DTE, LTE = None, K = 1, verbose = False, linear =
     # Retrieving H
     if(linear):
         H = linearSVM_H(DTR, LTR, K)
+    elif(RBF):
+        H = kernelSVM_H(DTR, LTR, gamma, K, True)
     else:
-        H = kernelSVM_H(DTR, LTR, gamma, K)
+        H = kernelSVM_H(DTR, LTR, gamma, K, False) # == Quadratic SVM
 
 
     # Calculating the minimum

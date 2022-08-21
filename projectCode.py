@@ -611,7 +611,113 @@ def k_fold(D, L, k, choice):
         plt.figure()
         for i in range (3): # 3 values of pitil being considered
             plt.plot(Cs, finalMinDCFArray[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
-        plt.xlabel(r"values for $\lambda$")
+        plt.xlabel(r"values for C$")
+        plt.ylabel("DCF")
+        plt.legend()
+        plt.xscale('log')
+        plt.show()
+        plt.close()
+
+    elif(choice==8): # linear SVM with gaussianization
+        C = 10**(0)
+
+        finalMinDCFArray = np.zeros((2, 3))
+
+        dcf_list5 = np.zeros((2, 1))
+        dcf_list1 = np.zeros((2, 1))
+        dcf_list9 = np.zeros((2, 1))
+
+        resultsForUnbalanced = np.zeros((2, 0))
+        resultsForBalanced = np.zeros((2, 0))
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            DTE = gaussianize(DTE, DTR)
+            DTR = gaussianize(DTR)
+
+            # For unbalanced SVM
+            predicted = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True)
+            temp = np.vstack((predicted, LTE))
+            resultsForUnbalanced = np.hstack((resultsForUnbalanced, temp))
+
+            # For balanced SVM
+            predicted = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, useRebalancing=True)
+            temp = np.vstack((predicted, LTE))
+            resultsForBalanced = np.hstack((resultsForBalanced, temp))
+            
+            
+            print("Fold number ", i)
+
+        dcf_list5[0][0] = bayes_risk(None, 0.5, True, True, resultsForUnbalanced[0, :], resultsForUnbalanced[1, :])
+        dcf_list5[1][0] = bayes_risk(None, 0.5, True, True, resultsForBalanced[0, :], resultsForBalanced[1, :])
+
+        dcf_list1[0][0] = bayes_risk(None, 0.1, True, True, resultsForUnbalanced[0, :], resultsForUnbalanced[1, :])
+        dcf_list1[1][0] = bayes_risk(None, 0.1, True, True, resultsForBalanced[0, :], resultsForBalanced[1, :])
+
+        dcf_list9[0][0] = bayes_risk(None, 0.9, True, True, resultsForUnbalanced[0, :], resultsForUnbalanced[1, :])
+        dcf_list9[1][0] = bayes_risk(None, 0.9, True, True, resultsForBalanced[0, :], resultsForBalanced[1, :])
+        
+        finalMinDCFArray = np.hstack((dcf_list5, dcf_list1))
+        finalMinDCFArray = np.hstack((finalMinDCFArray, dcf_list9))
+        print("final DCFs for quadratic logistic regression:")
+        print("For Unbalanced:", finalMinDCFArray[0])
+        print("For Balanced:", finalMinDCFArray[1])
+    
+    elif(int(choice)==9): # Plots for the quadratic SVM
+        resolution = 15
+        minMaxC = [-3, 1]
+        Cs = np.logspace(minMaxC[0], minMaxC[1], resolution)
+        piTilArray = [0.5, 0.1, 0.9]
+
+        predictions = np.zeros((resolution+1, 0))
+        finalMinDCFArray = np.zeros((3, resolution))
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            DTE = gaussianize(DTE, DTR)
+            DTR = gaussianize(DTR)
+
+            if(choice==9.1): # Without rebalancing
+                predictions = np.hstack((predictions, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, linear=False, RBF=False)))
+
+            elif(choice==9.2): # With rebalancing
+                predictions = np.hstack((predictions, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, useRebalancing=True, linear=False, RBF=False)))
+
+            
+            print("Fold number ", i, " done...")
+        
+        for i in range (resolution):
+            for j in range (len(piTilArray)):
+                finalMinDCFArray[j][i] = bayes_risk(None, piTilArray[j], True, True, predictions[i, :], predictions[-1, :])
+            
+            print("calculation ", i, " out of ", resolution)
+
+        plt.figure()
+        for i in range (3): # 3 values of pitil being considered
+            plt.plot(Cs, finalMinDCFArray[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
+        plt.xlabel(r"values for C$")
         plt.ylabel("DCF")
         plt.legend()
         plt.xscale('log')
@@ -620,7 +726,7 @@ def k_fold(D, L, k, choice):
 
 def main():
     attrs, labels = load('./Train.txt')
-    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n"))
+    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n"))
     if (choice==1): # Plot original data
         plotInitialData(attrs, labels)
         
@@ -677,7 +783,7 @@ def main():
         elif(choice2==4):
             k_fold(attrs, labels, 5, 6.4)
     
-    elif(choice==7):
+    elif(choice==7): 
         choice2 = int(input("Type:\n -1 to plot minDCF without gaussianization and without balancing\n -2 to plot minDCF without gaussianization and with balancing\n -3 to plot minDCF with gaussianization and without balancing\n -4 to plot minDCF with gaussianization and with balancing\n"))
         if(choice2==1): # plot minDCF without gaussianization and without balancing
             k_fold(attrs, labels, 5, 7.1)
@@ -687,6 +793,16 @@ def main():
             k_fold(attrs, labels, 5, 7.3)
         elif(choice2==4): # plot minDCF with gaussianization and with balancing
             k_fold(attrs, labels, 5, 7.4)
+
+    elif(choice==8): # Linear SVM with gaussianization and balanced + unbalanced
+        k_fold(attrs, labels, 5, choice)
+
+    elif(choice==9): # Quadratic SVM with gaussianization and balanced + unbalanced
+        choice2 = int(input("Type:\n -1 to plot minDCF with gaussianization and without balancing\n -2 to plot minDCF with gaussianization and with balancing\n"))
+        if(choice2==1): # plot minDCF with gaussianization and without balancing
+            k_fold(attrs, labels, 5, 9.1)
+        elif(choice2==2): # plot minDCF with gaussianization and with balancing
+            k_fold(attrs, labels, 5, 9.2)
 
     else:
         print("Invalid number")
