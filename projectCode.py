@@ -994,6 +994,75 @@ def k_fold(D, L, k, choice):
         plt.show()
         plt.close()
 
+    elif(int(choice)==14): # GMM
+        dcf_list5 = np.zeros((4, 1))
+        dcf_list1 = np.zeros((4, 1))
+        dcf_list9 = np.zeros((4, 1))
+
+        results = np.zeros((3, 0)) # 3 lines: gaussianized and otherwise + LTE
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+
+        if(choice==14.1):
+            gmmType = 'fullCovariance'
+            components = 8
+        if(choice==14.2):
+            gmmType = 'tiedCovariance'
+            components = 128
+        if(choice==14.3):
+            gmmType = 'diagonal'
+            components = 128
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            llrs = np.zeros((0, LTE.shape[0]))
+
+            gaussDTE = gaussianize(DTE, DTR)
+            gaussDTR = gaussianize(DTR)
+
+            # GMM for gaussianized and ungaussianized
+            prediction, llr = calculateGMM(DTR, DTE, LTR, alpha, psi, components, stop, gmmType)
+            prediction, gaussllr = calculateGMM(gaussDTR, gaussDTE, LTR, alpha, psi, components, stop, gmmType)
+
+            llr = np.vstack((llr, gaussllr))
+            llrs = np.vstack((llrs, llr))
+            llrs = np.vstack((llrs, LTE))
+
+            results = np.hstack((results, llrs))
+            
+            print("Fold number ", i)
+
+        dcf_list5[0][0] = bayes_risk(None, 0.5, True, True, results[0, :], results[-1, :]) # Raw
+        dcf_list5[1][0] = bayes_risk(None, 0.5, True, True, results[1, :], results[-1, :]) # Gauss
+
+        dcf_list1[0][0] = bayes_risk(None, 0.1, True, True, results[0, :], results[-1, :]) # Raw
+        dcf_list1[1][0] = bayes_risk(None, 0.1, True, True, results[1, :], results[-1, :]) # Gauss
+
+        dcf_list9[0][0] = bayes_risk(None, 0.9, True, True, results[0, :], results[-1, :]) # Raw
+        dcf_list9[1][0] = bayes_risk(None, 0.9, True, True, results[1, :], results[-1, :]) # Gauss
+
+
+        
+        finalMinDCFArray = np.hstack((dcf_list5, dcf_list1))
+        finalMinDCFArray = np.hstack((finalMinDCFArray, dcf_list9))
+        print("final DCFs for GMM model = ", gmmType)
+        print("Order of piTils = 0.5 | 0.1 | 0.9")
+        print("For Raw features:", finalMinDCFArray[0])
+        print("For Gaussianized:", finalMinDCFArray[1])
+        print("Final fucking model C====8")
+
 def main():
     attrs, labels = load('./Train.txt')
     choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n -10 for quad SVM\n -11 for plots for the RBF SVM\n -12 for RBF SVM\n -13 for plots of GMM\n -14 for GMM\n"))
@@ -1093,7 +1162,13 @@ def main():
             k_fold(attrs, labels, 5, 13.3)
 
     elif(choice==14): # -14 for GMM
-        k_fold(attrs, labels, 5, 14)
+        choice2 = int(input("Type:\n -1 for minDCF GMM full covariance\n -2 for minDCF GMM tied covariance\n -3 for minDCF GMM diagonal covariance\n"))
+        if(choice2==1): # minDCF GMM full covariance
+            k_fold(attrs, labels, 5, 14.1)
+        elif(choice2==2): # minDCF GMM tied covariance
+            k_fold(attrs, labels, 5, 14.2)
+        elif(choice2==3): # minDCF GMM diagonal covariance
+            k_fold(attrs, labels, 5, 14.3)
 
     else:
         print("Invalid number")
