@@ -909,7 +909,7 @@ def k_fold(D, L, k, choice):
         alpha = 0.1
         psi = 0.01
         stop = 10**-6
-        components = 1024
+        components = 512
 
         iterations = int(np.log2(components)+1)
 
@@ -983,8 +983,6 @@ def k_fold(D, L, k, choice):
             print("calculation ", i+1, " out of ", iterations)
 
         xticks = list(range(1, iterations+1))
-        print(len(xticks))
-        print(len(xLabels))
 
         plt.figure()
         plt.bar(xticks, finalMinDCFArray[0, :], width=0.3, label="Raw features", align='edge')
@@ -1096,8 +1094,6 @@ def main():
 
     elif(choice==14): # -14 for GMM
         k_fold(attrs, labels, 5, 14)
-
-
 
     else:
         print("Invalid number")
