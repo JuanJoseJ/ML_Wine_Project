@@ -29,35 +29,6 @@ def logpdf_GAU_ND(D, mu, C):
     T3 = np.diag(T3)
     return T1 + T2 + T3
 
-def logpdf_GMM(X, gmm):
-    '''
-    # Overview:
-    - The ideia is to approximate each sample of X to a gaussian distribution. In order to do it, this function calls "logpdf_GAU_ND" from lab 4.
-    # Params:
-    - X = (D,N) where D is the size of a sample and N is the number of samples in X;
-    - gmm = (M, 3) where M is the number of gaussians that we are considering in the wighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]).
-    # Returns:
-    - S = Matrix of densities
-    - logdensities
-    '''
-    # Retrieving N:
-    N = X.shape[1]
-    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
-    M = len(gmm)
-    # Creating a matrix S (M,N) to store the log Gau_ND for each mu, C for each sample
-    S = []
-    for i in range (M):
-        w = gmm[i][0]
-        mu = gmm[i][1]
-        C = gmm[i][2]
-        densities = logpdf_GAU_ND(X, mu, C) # Densities is a vector where each element corresponds to log Gau for the current attribute
-        densities = densities + np.log(w)
-        S.append(densities)
-    S = np.reshape(S, (M, N)) # Joint densities matrix
-    # Now, since everything is log, need to perform a sum of the logs. This means:
-    logdens = scipy.special.logsumexp(S, axis=0) #Log marginal
-    return S, np.reshape(logdens, (1, N))
-
 #===================================================================================================
 
 def empirical_cov(data, printMode = False):
@@ -1147,87 +1118,408 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = 
 
 #============================================== GMM ======================================================
 
-def GMM_EM(X, gmm, psi, error=10**-6):
+def logpdf_GMM(X, gmm, returnS = False):
     '''
-    ## Explanation
-    Calculates a GMM the maximizes the likelihood for the training set.    
-    ## Params
-    X is a set of attributes and gmm (Initial) is a set of [[w0,mu0,cov0],...]
+    ## Overview:
+    - The ideia is to approximate each sample of X to a gaussian distribution. In order to do it, this function calls "logpdf_GAU_ND" from lab 4.
+
+    ## Params:
+    - X = (D,N) where D is the size of a sample and N is the number of samples in X;
+    - gmm = (M, 3) where M is the number of gaussians that we are considering in the weighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]) --> w1 is a value, mu = (D, 1) and C = (D,D).
+
     ## Returns
-    Returns a new GMM with an improved likelihood
+    If returnS = False, it returns just the log-marginal (which is the sum of S -- See the lab 10). \n
+    Else, it returns both S and log marginal
     '''
+    # Retrieving N:
+    N = X.shape[1]
+    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
     M = len(gmm)
-    S, logdens = logpdf_GMM(X,gmm) # logDens = logMarginal
-    logGamma = S-logdens # posteriorLogProb = jointDensities - marginalDensities
-    responsability = np.exp(logGamma) # Posterior distribution (MxN). Responsability.
-    log_likelihood=None
-    newGMM = []
-    while log_likelihood is None or abs(np.average(logdens)-np.average(log_likelihood))>error:
+
+    # Creating a matrix S (M,N) to store the log Gau_ND for each mu, C for each sample
+    S = []
+
+    for i in range (M):
+
+        w = gmm[i][0]
+        mu = gmm[i][1]
+        C = gmm[i][2]
+
+        densities = logpdf_GAU_ND(X, mu, C) # Densities is a vector where each element corresponds to log Gau for the current attribute
+        densities += np.log(w)
+        S.append(densities)
+    
+    S = np.reshape(S, (M, N))
+
+    # Now, since everything is log, need to perform a sum of the logs. This means:
+    logdens = scipy.special.logsumexp(S, axis=0)
+
+    if (returnS):
+        return S, np.reshape(logdens, (1, N))
+    else: 
+        return np.reshape(logdens, (1, N))
+
+def GMM_EM(X, initialGMM, stop, psi):
+    '''
+    ## Params
+    - X = (D,N) where D is the size of a sample and N is the number of samples in X;
+    - initialGMM = (M, 3) where M is the number of gaussians that we are considering in the weighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]) --> w1 is a value, mu = (D, 1) and C = (D,D).
+    - stop = stop criterion for the algorithm iterations
+    - psi = Lower bound to the eigenvalues of the covariance matrices (to make sure that that likelihood doesn't decrease)
+
+    ## Explanation
+    EM is an algorithm to calculate an estimation/approximation for a gmm. It uses an approach that is divided into 2 steps: E and M.\n
+    - On the E step, it calculates the posterior probability for each component of the given gmm and for each sample. The result is called responsabilities.
+    - On the M step, it calculates the new estimated parameters using the responsabilities calculated on the previous step.
+    The algorithm runs until the difference of the previous likelihood and the current is lower than the "stop" parameter.
+    '''
+
+    # Regtrieving number of samples
+    N = X.shape[1]
+    D = X.shape[0]
+    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
+    M = len(initialGMM)
+
+    gmm = []
+
+    for i in range(M):
+        # Constraining the eigenvalues of the covariance matrices
+        w = initialGMM[i][0]
+        mu = initialGMM[i][1]
+        C = initialGMM[i][2]
+        
+        U, s, _ = np.linalg.svd(C)
+        s[s<psi] = psi
+        C = np.dot(U, mcol(s)*U.T)
+
+        gmm.append([w, mu, C])
+
+    # Initial E step:
+    S, marginal = logpdf_GMM(X, gmm, returnS=True) # S = (M, N) and marginal = (1, N)
+    responsabilities = np.exp(S-marginal) # = Yg,i = (M, N)
+
+    while(True):
+
         newGMM = []
-        for j in range(M):
-            gamma = responsability[j,:]
-            Zg = np.sum(gamma)
-            Fg = np.sum(vrow(gamma)*X, axis=1)
-            Sg = np.dot(X, (vrow(gamma)*X).T)
-            newMu = vcol(Fg/Zg)
-            newCov = (Sg/Zg)-np.dot(newMu,newMu.T)
-            newW = Zg/X.shape[1]
-            
+
+        prevLikelihood = np.sum(marginal)/N
+
+        # M step:
+        for i in range(M):
+            Zg = np.sum(responsabilities[i])
+            Fg = np.sum(responsabilities[i]*X, 1) # Fg = (D, 1)
+            Sg = np.dot(X, (responsabilities[i]*X).T)
+
+            newMu = np.reshape(Fg/Zg, (D, 1))
+            newCov = Sg/Zg - np.dot(newMu, newMu.T)
+            newW = Zg/(np.sum(responsabilities))
+
             # Constraining the eigenvalues of the covariance matrices
             U, s, _ = np.linalg.svd(newCov)
             s[s<psi] = psi
             newCov = np.dot(U, mcol(s)*U.T)
-                
+
             newGMM.append([newW, newMu, newCov])
-        log_likelihood = logdens
-        S, logdens = logpdf_GMM(X, newGMM)
-        logGamma = np.subtract(S, logdens) # 
-        responsability = np.exp(logGamma)
-        
+
+        # New E step
+        S, marginal = logpdf_GMM(X, newGMM, returnS=True) # S = (M, N) and marginal = (1, N)
+        newLikelihood = np.sum(marginal)/N
+
+        if(newLikelihood - prevLikelihood < stop):
+            break
+        else:
+            gmm = newGMM
+            responsabilities = np.exp(S-marginal)
+    
+    #print("======================= FINAL LIKELIHOOD = ", newLikelihood)
     return newGMM
 
-def GMM_LBG(gmm, alpha, psi):
+def diagonal_GMM_EM(X, initialGMM, stop, psi):
+    '''
+    ## Params
+    - X = (D,N) where D is the size of a sample and N is the number of samples in X;
+    - gmm = (M, 3) where M is the number of gaussians that we are considering in the weighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]) --> w1 is a value, mu = (D, 1) and C = (D,D).
+    - stop = stop criterion for the algorithm iterations
+
+    ## Explanation
+    EM is an algorithm to calculate an estimation/approximation for a gmm. It uses an approach that is divided into 2 steps: E and M.\n
+    - On the E step, it calculates the posterior probability for each component of the given gmm and for each sample. The result is called responsabilities.
+    - On the M step, it calculates the new estimated parameters using the responsabilities calculated on the previous step.
+    The algorithm runs until the difference of the previous likelihood and the current is lower than the "stop" parameter.
+    '''
+
+    # Regtrieving number of samples
+    N = X.shape[1]
+    D = X.shape[0]
+    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
+    M = len(initialGMM)
+
+    gmm = []
+
+    for i in range(M):
+        # Constraining the eigenvalues of the covariance matrices
+        w = initialGMM[i][0]
+        mu = initialGMM[i][1]
+        C = initialGMM[i][2]
+        
+        U, s, _ = np.linalg.svd(C)
+        s[s<psi] = psi
+        C = np.dot(U, mcol(s)*U.T)
+
+        gmm.append([w, mu, C])
+
+    # Initial E step:
+    S, marginal = logpdf_GMM(X, gmm, returnS=True) # S = (M, N) and marginal = (1, N)
+    responsabilities = np.exp(S-marginal) # = Yg,i = (M, N)
+
+    while(True):
+
+        newGMM = []
+
+        prevLikelihood = np.sum(marginal)/N
+
+        # M step:
+        for i in range(M):
+            Zg = np.sum(responsabilities[i])
+            Fg = np.sum(responsabilities[i]*X, 1) # Fg = (D, 1)
+            Sg = np.dot(X, (responsabilities[i]*X).T)
+
+            newMu = np.reshape(Fg/Zg, (D, 1))
+            newCov = Sg/Zg - np.dot(newMu, newMu.T)
+            newCov = np.multiply(newCov, np.identity(D))
+            newW = Zg/(np.sum(responsabilities))
+
+            # Constraining the eigenvalues of the covariance matrices
+            U, s, _ = np.linalg.svd(newCov)
+            s[s<psi] = psi
+            newCov = np.dot(U, mcol(s)*U.T)
+
+            newGMM.append([newW, newMu, newCov])
+
+        # New E step
+        S, marginal = logpdf_GMM(X, newGMM, returnS=True) # S = (M, N) and marginal = (1, N)
+        newLikelihood = np.sum(marginal)/N
+
+        if(newLikelihood - prevLikelihood < stop):
+            break
+        else:
+            gmm = newGMM
+            responsabilities = np.exp(S-marginal)
+    
+    return newGMM
+
+def tied_GMM_EM(X, initialGMM, stop, psi):
+    '''
+    ## Params
+    - X = (D,N) where D is the size of a sample and N is the number of samples in X;
+    - gmm = (M, 3) where M is the number of gaussians that we are considering in the weighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]) --> w1 is a value, mu = (D, 1) and C = (D,D).
+    - stop = stop criterion for the algorithm iterations
+
+    ## Explanation
+    EM is an algorithm to calculate an estimation/approximation for a gmm. It uses an approach that is divided into 2 steps: E and M.\n
+    - On the E step, it calculates the posterior probability for each component of the given gmm and for each sample. The result is called responsabilities.
+    - On the M step, it calculates the new estimated parameters using the responsabilities calculated on the previous step.
+    The algorithm runs until the difference of the previous likelihood and the current is lower than the "stop" parameter.
+    '''
+
+    # Regtrieving number of samples
+    N = X.shape[1]
+    D = X.shape[0]
+    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
+    M = len(initialGMM)
+
+    gmm = []
+
+    for i in range(M):
+        # Constraining the eigenvalues of the covariance matrices
+        w = initialGMM[i][0]
+        mu = initialGMM[i][1]
+        C = initialGMM[i][2]
+        
+        U, s, _ = np.linalg.svd(C)
+        s[s<psi] = psi
+        C = np.dot(U, mcol(s)*U.T)
+
+        gmm.append([w, mu, C])
+
+    # Initial E step:
+    S, marginal = logpdf_GMM(X, gmm, returnS=True) # S = (M, N) and marginal = (1, N)
+    responsabilities = np.exp(S-marginal) # = Yg,i = (M, N)
+
+    while(True):
+
+        newGMM = []
+
+        prevLikelihood = np.sum(marginal)/N
+
+        newWList = []
+        newMuList = []
+        sumCov = 0
+        # M step:
+        for i in range(M):
+            Zg = np.sum(responsabilities[i])
+            Fg = np.sum(responsabilities[i]*X, 1) # Fg = (D, 1)
+            Sg = np.dot(X, (responsabilities[i]*X).T)
+
+            newMu = np.reshape(Fg/Zg, (D, 1))
+            sumCov += Zg*(Sg/Zg - np.dot(newMu, newMu.T))
+            newW = Zg/(np.sum(responsabilities))
+
+            newGMM.append([newW, newMu])
+
+        newCov = sumCov/N
+        # Constraining the eigenvalues of the covariance matrices
+        U, s, _ = np.linalg.svd(newCov)
+        s[s<psi] = psi
+        newCov = np.dot(U, mcol(s)*U.T)
+
+        for i in range(M):
+            newGMM[i].append(newCov)
+
+        # New E step
+        S, marginal = logpdf_GMM(X, newGMM, returnS=True) # S = (M, N) and marginal = (1, N)
+        newLikelihood = np.sum(marginal)/N
+
+        if(newLikelihood - prevLikelihood < stop):
+            break
+        else:
+            gmm = newGMM
+            responsabilities = np.exp(S-marginal)
+    
+    return newGMM
+
+
+def GMM_LBG(X, gmm, alpha, psi, components, stop, type = 'fullCovariance'):
     '''
     ## Explanation
     Given a initial guess for the GMM parameters ([w1, mu1, C1]), it can generate 2, 3, 4... Gs more, so it would become: [[w1, mu1, C1], [w2, mu2, C2], ...]
     With the new generated G, can use it in the EM algorithm to estimate a solution for the model.
     If it receives G, will return 2G.
     ## Params
-    - gmm = (M, N) where M is the number of gaussians that we are considering in the wighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]).
+    - gmm = (M, 3) where M is the number of gaussians that we are considering in the weighted sum (gmm = [[w1, mu1, C1], [w2, mu2, C2], ...]).
     - alpha = factor of multiplication
     - psi = Lower bound to the eigenvalues of the covariance matrices (to make sure that that likelihood doesn't decrease)
+    - components = How many components to consider in the prediction
+    - stop = stop criterion for the EM algorithm iterations
     '''
-    # Retrieving M (since gmm is a list and not an array, can't use "shape"):
-    M = len(gmm)
-    genGMM = []
-    for i in range (M):
-        w = gmm[i][0]
-        mu = gmm[i][1]
-        C = gmm[i][2]
-        # Constraining the eigenvalues of the covariance matrices
-        # U, s, _ = np.linalg.svd(C)
-        # s[s<psi] = psi
-        # C = np.dot(U, mcol(s)*U.T)
-        # Calculating displacement vector dg:
-        U, s, Vh = np.linalg.svd(C)
-        dg = U[:, 0:1] * s[0]**0.5 * alpha
-        genGMM.append([w/2, mu + dg, C])
-        genGMM.append([w/2, mu - dg, C])
-    return genGMM
 
-def initial_gmm(DT, LT):
+    # first optimization using the initial guess
+    if (type == 'fullCovariance'):
+        newGMM = GMM_EM(X, gmm, stop, psi)
+        # print("newGMM = ", newGMM)
+    elif(type == 'diagonal'):
+        newGMM = diagonal_GMM_EM(X, gmm, stop, psi)
+    else:
+        newGMM = tied_GMM_EM(X, gmm, stop, psi)
+
+    # newGMM = gmm
+
+    iterations = int(np.log2(components))
+    
+    for i in range (iterations):
+        # Retrieving M (since gmm is a list and not an array, can't use "shape"):
+        M = len(newGMM)
+
+        genGMM = []
+        for i in range (M):
+            w = newGMM[i][0]
+            mu = newGMM[i][1]
+            C = newGMM[i][2]
+            
+            # Constraining the eigenvalues of the covariance matrices
+            U, s, _ = np.linalg.svd(C)
+            s[s<psi] = psi
+            C = np.dot(U, mcol(s)*U.T)
+
+            # Calculating displacement vector dg:
+            U, s, Vh = np.linalg.svd(C)
+            dg = U[:, 0:1] * s[0]**0.5 * alpha
+
+            genGMM.append([w/2, mu + dg, C])
+            genGMM.append([w/2, mu - dg, C])
+
+        if (type == 'fullCovariance'):
+            newGMM = GMM_EM(X, genGMM, stop, psi)
+        elif(type == 'diagonal'):
+            newGMM = diagonal_GMM_EM(X, genGMM, stop, psi)
+        else:
+            newGMM = tied_GMM_EM(X, genGMM, stop, psi)
+
+    return newGMM
+
+def calculateGMM(DTR, DTE, LTR, alpha, psi, components, stop, type = 'fullCovariance'):
     '''
-    ## Explanation:
-    This calculates the initial gmm by class for a set of data
-    ## Return:
-    A matrix of the initial GCC data of shape [[W0,M0,S0],...[Wc,Mc,Sc]]
+    ## Params
+    - DTR
+    - DTE
+    - initialGMM = [w, mu, C] = Initial gmm to consider
+    - alpha = factor of multiplication
+    - psi = Lower bound to the eigenvalues of the covariance matrices (to make sure that that likelihood doesn't decrease)
+    - components = How many components to consider in the prediction
+    - type = 'fullCovariance', 'diagonal' and 'tiedCovariance'
     '''
-    Nc = np.unique(LT).size # Number of classes
-    calcGCC = []
-    for i in range(Nc):
-        DTc = DT[:, LT==i]
-        Mc = vcol(DTc.mean(axis=1)) # Class i mean
-        Sc = empirical_cov(DTc) # Covariance of class i
-        Wc = 1
-        calcGCC.append([Wc, Mc, Sc])
-    return calcGCC
+
+    # ============================================================================
+    # FIRST STEP: Calcuate the empirical mean and covariance matrix for each class
+    # ============================================================================
+    
+    # Picking samples for each class
+    D0 = DTR[:, LTR==0]
+    D1 = DTR[:, LTR==1]
+
+    # First step: Calculate mu as the mean of each attribute between all samples.
+    mu0 = vcol(D0.mean(1))
+    mu1 = vcol(D1.mean(1))
+
+    # Now it is needed to center the data, i.e., subtract mu (the mean) from all columns of D.
+    DC0 = D0 - mu0
+    DC1 = D1 - mu1
+
+    # Now, it is needed to calculate the covariance matrix C = 1/N * Dc*Dc.T
+    NTR = DTR.shape[1]
+    NTE = DTE.shape[1]
+
+    N0 = D0.shape[1]
+    C0 = (1/N0)*np.dot(DC0, np.transpose(DC0))
+
+    N1 = D1.shape[1]
+    C1 = (1/N1)*np.dot(DC1, np.transpose(DC1))
+
+    # ============================================================================
+    #        SECOND STEP: Estimate the gmms for the different classes            #
+    # ============================================================================
+
+    gmm0 = GMM_LBG(D0, [[1, mu0, C0]], alpha, psi, components, stop, type)
+    gmm1 = GMM_LBG(D1, [[1, mu1, C1]], alpha, psi, components, stop, type)
+
+    # ============================================================================
+    # THIRD STEP: Calcuate the log densities for each class and all test samples
+    # ============================================================================
+
+    # It will return a score matrix S (C, N) where C = number of classes and N = number of samples
+
+    S = []
+    S.append(logpdf_GMM(DTE, gmm0))
+    S.append(logpdf_GMM(DTE, gmm1))
+    S = np.reshape(S, (2, NTE))
+
+    # ============================================================================
+    # FOURTH STEP: Calcuate the log joint densities (add the score by the prior prob)
+    # ============================================================================
+
+    # logSJoint = S + np.reshape(np.log(prior), (len(prior), 1))
+    
+    # ============================================================================
+    # FOURTH STEP: Calcuate the posterior probabilities
+    # ============================================================================
+
+    # logSMarginal =  vrow(scipy.special.logsumexp(logSJoint, axis=0))
+    # SPost = np.exp(logSJoint - logSMarginal)
+
+    SPost = np.exp(S)
+
+    # The predicted labels are obtained picking the highest probability among the classes for a given sample
+    predicted = SPost.argmax(0)
+    llr = S[1,:] - S[0, :]
+    
+    return predicted, llr
