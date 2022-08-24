@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize, k_folds, PCA
 from modules.dataLoad import load, split_db_2to1
 from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calcLogRegInLambdaRange, calculateSVM, calcSVMInCRange, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, tied_Cov_MVG, plotMinDCFLogReg, logpdf_GMM, GMM_EM, GMM_LBG, calculateGMM
-from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap
-
+from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap, bayes_error_plot
 
 def shuffle_data(D,L):
     '''
@@ -22,6 +21,62 @@ def shuffle_data(D,L):
     L = temp_data[-1,:]
     D = np.delete(temp_data, -1, 0)
     return D, L
+
+def evaluateModel(DTR, LTR, DTE, LTE, choice):
+
+    if (int(choice) == 15):
+        #SVM parameters
+        C = 10**(1)
+        gamma = 10**-1
+
+        # GMM parameters
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+        components = 128
+
+        dcf_list = np.zeros((2, 3))
+        results = np.zeros((3, 0)) # 2 lines: 1 for the predicted and 1 fot the LTE
+
+        DTE = gaussianize(DTE, DTR)
+        DTR = gaussianize(DTR)
+
+        # For balanced SVM
+        print("Starting SVM calculation")
+        predictedSVM = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, useRebalancing=True, piT=0.5, RBF=True, linear=False, gamma=gamma)
+        print("Starting GMM calculation")
+        predictedGMM, llr = calculateGMM(DTR, DTE, LTR, alpha, psi, components, stop, 'tiedCovariance')
+        print("Finished calculations")
+
+        temp = np.vstack((predictedSVM, llr))
+        temp = np.vstack((temp, LTE))
+        results = np.hstack((results, temp))
+        
+        if (choice == 15.1):
+            # Lists for the DCF
+            piTils = [0.5, 0.1, 0.9]
+            thresholds = [-np.log(piTils[0]/(1-piTils[0])), -np.log(piTils[1]/(1-piTils[1])), -np.log(piTils[2]/(1-piTils[2]))]
+
+            dcf_list[0][0] = bayes_risk(None, piTils[0], True, False, results[0, :], results[-1, :], threshold = thresholds[0])
+            dcf_list[0][1] = bayes_risk(None, piTils[1], True, False, results[0, :], results[-1, :], threshold = thresholds[1])
+            dcf_list[0][2] = bayes_risk(None, piTils[2], True, False, results[0, :], results[-1, :], threshold = thresholds[2])
+
+            dcf_list[1][0] = bayes_risk(None, piTils[0], True, False, results[1, :], results[-1, :], threshold = thresholds[0])
+            dcf_list[1][1] = bayes_risk(None, piTils[1], True, False, results[1, :], results[-1, :], threshold = thresholds[1])
+            dcf_list[1][2] = bayes_risk(None, piTils[2], True, False, results[1, :], results[-1, :], threshold = thresholds[2])
+            
+            print("Actual DCFs for RBF SVM with theoretical threshold:")
+            print("Order of piTils = 0.5 | 0.1 | 0.9")
+            print("RBF SVM: ", dcf_list[0])
+            print("GMM    : ", dcf_list[1])
+
+        elif(choice == 15.2):
+            print("Entered printing phase")
+            labelsForScores = ["SVM", "GMM"]
+            priorRange = (-4,4,100)
+            bayes_error_plot(results[0:2, :], results[-1, :], labelsForScores, priorRange)
+        
+    return 0
 
 def k_fold(D, L, k, choice):
     '''
@@ -1061,11 +1116,95 @@ def k_fold(D, L, k, choice):
         print("Order of piTils = 0.5 | 0.1 | 0.9")
         print("For Raw features:", finalMinDCFArray[0])
         print("For Gaussianized:", finalMinDCFArray[1])
-        print("Final fucking model C====8")
+
+    elif(int(choice)==15): # Model selection RBF SVM and GMM
+
+        #SVM parameters
+        C = 10**(1)
+        gamma = 10**-1
+
+        # GMM parameters
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+        components = 128
+
+        dcf_list = np.zeros((2, 3))
+        results = np.zeros((3, 0)) # 2 lines: 1 for the predicted and 1 fot the LTE
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            DTE = gaussianize(DTE, DTR)
+            DTR = gaussianize(DTR)
+
+            # For balanced SVM
+            print("Starting SVM calculation")
+            predictedSVM = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, useRebalancing=True, piT=0.5, RBF=True, linear=False, gamma=gamma)
+            print("Starting GMM calculation")
+            predictedGMM, llr = calculateGMM(DTR, DTE, LTR, alpha, psi, components, stop, 'tiedCovariance')
+            print("Finished calculations")
+
+            if(choice == 15.3):
+                alphaBeta = calculateLogReg(np.reshape(predictedSVM, (1, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+                piTilCalibration = 0.5
+                predictedSVM = alphaBeta[0]*predictedSVM + alphaBeta[1] - np.log(piTilCalibration/(1-piTilCalibration))
+
+                alphaBeta = calculateLogReg(np.reshape(llr, (1, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+                piTilCalibration = 0.5
+                llr = alphaBeta[0]*llr + alphaBeta[1] - np.log(piTilCalibration/(1-piTilCalibration))
+
+            temp = np.vstack((predictedSVM, llr))
+            temp = np.vstack((temp, LTE))
+            results = np.hstack((results, temp))
+
+            print("Fold number ", i, " done...")
+            
+        if (choice == 15.1 or choice==15.3):
+            # Lists for the DCF
+            piTils = [0.5, 0.1, 0.9]
+            thresholds = [-np.log(piTils[0]/(1-piTils[0])), -np.log(piTils[1]/(1-piTils[1])), -np.log(piTils[2]/(1-piTils[2]))]
+
+            dcf_list[0][0] = bayes_risk(None, piTils[0], True, False, results[0, :], results[-1, :], threshold = thresholds[0])
+            dcf_list[0][1] = bayes_risk(None, piTils[1], True, False, results[0, :], results[-1, :], threshold = thresholds[1])
+            dcf_list[0][2] = bayes_risk(None, piTils[2], True, False, results[0, :], results[-1, :], threshold = thresholds[2])
+
+            dcf_list[1][0] = bayes_risk(None, piTils[0], True, False, results[1, :], results[-1, :], threshold = thresholds[0])
+            dcf_list[1][1] = bayes_risk(None, piTils[1], True, False, results[1, :], results[-1, :], threshold = thresholds[1])
+            dcf_list[1][2] = bayes_risk(None, piTils[2], True, False, results[1, :], results[-1, :], threshold = thresholds[2])
+            
+            if(choice == 15.1):
+                info = "(not calibrated)"
+            else:
+                info = "(calibrated)"
+
+            print("Actual DCFs for RBF SVM with theoretical threshold " + info + ":")
+            print("Order of piTils = 0.5 | 0.1 | 0.9")
+            print("RBF SVM: ", dcf_list[0])
+            print("GMM    : ", dcf_list[1])
+
+        if(choice == 15.2 or choice == 15.3):
+            print("Entered printing phase")
+            labelsForScores = ["SVM", "GMM"]
+            priorRange = (-4,4,100)
+            bayes_error_plot(results[0:2, :], results[-1, :], labelsForScores, priorRange)
+
+# ================================================= MAIN ====================================================================================
 
 def main():
     attrs, labels = load('./Train.txt')
-    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n -10 for quad SVM\n -11 for plots for the RBF SVM\n -12 for RBF SVM\n -13 for plots of GMM\n -14 for GMM\n"))
+    testAttrs, testLabels = load('./Test.txt')
+    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n -10 for quad SVM\n -11 for plots for the RBF SVM\n -12 for RBF SVM\n -13 for plots of GMM\n -14 for GMM\n -15 for model selection (comparison between RBF SVM and GMM)\n"))
     if (choice==1): # Plot original data
         plotInitialData(attrs, labels)
         
@@ -1169,6 +1308,18 @@ def main():
             k_fold(attrs, labels, 5, 14.2)
         elif(choice2==3): # minDCF GMM diagonal covariance
             k_fold(attrs, labels, 5, 14.3)
+
+    elif(choice==15): # - Model selection
+        choice2 = int(input("Type:\n -1 for actual DCF of tied-cov GMM and RBF SVM\n -2 for Bayes error plot\n -3 for calibrated GMM and RBF SVM bothactual DCF and plot\n"))
+        if(choice2==1): # actual DCF of tied-cov GMM and RBF SVM
+            k_fold(attrs, labels, 5, 15.1)
+        elif(choice2==2): # Bayes error plots
+            k_fold(attrs, labels, 5, 15.2)
+        elif(choice2==3):
+            k_fold(attrs, labels, 5, 15.3)
+
+
+
 
     else:
         print("Invalid number")

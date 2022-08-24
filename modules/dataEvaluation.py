@@ -515,7 +515,7 @@ def calculatePHI(DTR):
         PHI = np.hstack((PHI, phi))
     return PHI
 
-def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, printIterations = False, quadratic = False, returnScores = False):
+def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, printIterations = False, quadratic = False, returnScores = False, recalibration = False):
     '''
     ## Explanation
     This function calculates the logistic regression result and returns the array of predicted labels.\n
@@ -550,7 +550,7 @@ def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, prin
         PHI = calculatePHI(DTE)
         predicted = posteriorLikelihood(x, DTE, verbose, LTE, True, returnScores=returnScores, PHI=PHI)
 
-    else:
+    elif(recalibration == False):
         startPoint = np.zeros(DTR.shape[0] + 1)
         x, f, d = scipy.optimize.fmin_l_bfgs_b(logreg_obj, startPoint, iprint = printIterations, args=(DTR, LTR, l, pit), approx_grad=True)
 
@@ -559,7 +559,16 @@ def calculateLogReg(DTR, LTR, DTE, LTE, pit, l = 10**(-6), verbose = False, prin
             print(x)
 
         predicted = posteriorLikelihood(x, DTE, verbose, LTE, returnScores=returnScores)
+    
+    else:
+        startPoint = np.zeros(DTR.shape[0] + 1)
+        x, f, d = scipy.optimize.fmin_l_bfgs_b(logreg_obj, startPoint, iprint = printIterations, args=(DTR, LTR, l, pit), approx_grad=True)
 
+        if (verbose):
+            print("Estimated position of the minimum of the expression of linear logistic regression: \n")
+            print(x)
+
+        return x
     return predicted
 
 def plotMinDCFLogReg(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, piTilArray = [0.5, 0.1, 0.9], verbose = False, quadratic = False, plot = False):
@@ -965,7 +974,7 @@ def dualityGap(w, C, z, extD, LD):
 
 #=========================== Confusion matrix and detection costs ===================================
 
-def confusionMatrix(prediction, correct, printStatus = False, useThreshold = False):
+def confusionMatrix(prediction, correct, printStatus = False, useThreshold = False, threshold = 0):
     '''
     ## Params:
     - prediction = List of predicted classes (assumed to be an 1 dim np array)
@@ -978,7 +987,7 @@ def confusionMatrix(prediction, correct, printStatus = False, useThreshold = Fal
     confMatrix = np.zeros((2, 2))
 
     if (useThreshold):
-        prediction = np.where(prediction > 0, 1, 0)
+        prediction = np.where(prediction > threshold, 1, 0)
 
     # Casting prediction to be integers
     prediction = prediction.astype(int)
@@ -997,7 +1006,7 @@ def confusionMatrix(prediction, correct, printStatus = False, useThreshold = Fal
 
     return confMatrix
 
-def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = None, labels = None, threshDivision = None):
+def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = None, labels = None, threshDivision = None, threshold = 0):
     '''
     ## Quick explanation:
     Evaluation of predictions can be done using empirical Bayes risk (or detection cost function, DCF), that represents the
@@ -1050,36 +1059,38 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = 
         
         return np.min(DCFValues)
 
-    elif(minimum and normalized == False):
+    # elif(minimum and normalized == False):
 
-        DCFValues = []
-        maxThresh = np.max(llr)
-        minThresh = np.min(llr)
+    #     DCFValues = []
+    #     maxThresh = np.max(llr)
+    #     minThresh = np.min(llr)
 
-        for t in range (1, threshDivision, 1):
+    #     for t in range (1, threshDivision, 1):
 
-            thresh = t*( (maxThresh-minThresh)/threshDivision )
-            thresh += minThresh
-            predicted = np.where(llr > thresh, 1, 0)
-            confMatrix = confusionMatrix(predicted, labels)
+    #         thresh = t*( (maxThresh-minThresh)/threshDivision )
+    #         thresh += minThresh
+    #         predicted = np.where(llr > thresh, 1, 0)
+    #         confMatrix = confusionMatrix(predicted, labels)
 
-            # Retrieve number of false negatives and false positives
-            FN = confMatrix[0][1]
-            FP = confMatrix[1][0]
+    #         # Retrieve number of false negatives and false positives
+    #         FN = confMatrix[0][1]
+    #         FP = confMatrix[1][0]
 
-            # Retrieving the true positive and true negative values:
-            TP = confMatrix[1][1]
-            TN = confMatrix[0][0]
+    #         # Retrieving the true positive and true negative values:
+    #         TP = confMatrix[1][1]
+    #         TN = confMatrix[0][0]
 
-            FNR = FN/(FN + TP)
-            FPR = FP/(FP + TN)
+    #         FNR = FN/(FN + TP)
+    #         FPR = FP/(FP + TN)
 
-            DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
-            DCFValues.append(DCF)
+    #         DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
+    #         DCFValues.append(DCF)
         
-        return np.min(DCFValues)
+    #     return np.min(DCFValues)
     
     elif(normalized):
+
+        confMatrix = confusionMatrix(scores, labels, useThreshold=True, threshold = threshold)
 
         # Retrieve number of false negatives and false positives
         FN = confMatrix[0][1]

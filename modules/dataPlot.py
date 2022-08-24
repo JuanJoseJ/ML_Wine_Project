@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
 import numpy as np
-from .dataEvaluation import logpdf_GAU_ND, empirical_cov
+from .dataEvaluation import logpdf_GAU_ND, empirical_cov, bayes_risk
 from .dataTransform import vrow
 
 '''
@@ -135,3 +135,68 @@ def plotCorrelationHeatMap(raw, class1, class2):
     # plt.imshow(matrix, cmap='hot', interpolation='nearest')
     plt.show()
     return
+
+# ===================================== Bayes plt =================================
+
+def confusion_matrix(prediction, correct):
+    '''
+    ## Params:
+    - prediction = List of predicted classes (assumed to be an 1 dim np array)
+    - correct = List of correct classes
+    '''
+    # Retrieving the number of classes (assuming the classes are labeled starting from class 0)
+    classesNumber = np.max(correct) + 1
+    # Creating empty confusion matrix
+    confMatrix = np.zeros((classesNumber, classesNumber))
+    for i in range (prediction.shape[0]):
+        confMatrix[prediction[i]][correct[i]] += 1
+    return confMatrix
+
+def bayes_error_plot(scores, LTE, labelsForScores, pRange = (-3, 3, 21)):
+    '''
+    ## Ideia:
+    For each p, will calculate the normalized DCF using pi = 1/( 1+e^(-p) ) by using the bayes decision for (pi, 1, 1)
+    ## Params:
+    - scores = (2, N) each line corresponding to one score to be calculated
+    - labelsForScores = Labels to be put in each score to be plotted ["", ""]
+    - pRange = (minRange, maxRAnge, step)
+    '''
+
+    effPriorLogOdds = np.linspace(pRange[0], pRange[1], pRange[2])
+
+    DCFValues = np.zeros((2,0))
+    minDCFValues = np.zeros((2,0))
+
+    for i in range(effPriorLogOdds.shape[0]):
+
+        # Retrieving p:
+        p = effPriorLogOdds[i]
+
+        # Calculating effective prior piTil:
+        piTil = 1/( 1 + np.exp(-p) )
+
+        # Calculating the prediction for pi and its confusion matrix:
+        # confMatrix = confusion_matrix(prediction, LTE)
+
+        # Retrieving normalized DCF:
+        DCF = bayes_risk(None, piTil, True, False, scores[0], LTE, threshold = -p)
+        DCF = np.vstack((DCF, bayes_risk(None, piTil, True, False, scores[1], LTE, threshold = -p)))
+        DCFValues = np.hstack((DCFValues, DCF))
+
+        # Retrieving minimum normalized DCF:
+        minDCF = bayes_risk(None, piTil, True, True, scores[0], LTE)
+        minDCF = np.vstack((minDCF, bayes_risk(None, piTil, True, True, scores[1], LTE)))
+        minDCFValues = np.hstack((minDCFValues, minDCF))
+
+    plt.figure()
+    plt.plot(effPriorLogOdds, DCFValues[0], label="DCF - " + labelsForScores[0], color="r")
+    plt.plot(effPriorLogOdds, DCFValues[1], label="DCF - " + labelsForScores[1], color="b")
+    plt.plot(effPriorLogOdds, minDCFValues[0], label="min DCF - " + labelsForScores[0], color="r", linestyle = 'dashed')
+    plt.plot(effPriorLogOdds, minDCFValues[1], label="min DCF - " + labelsForScores[1], color="b", linestyle = 'dashed')
+    plt.ylim([0, 1.1])
+    plt.xlim([-3, 3])
+    plt.xlabel(r"Prior log odds = $log\frac{\tilde \pi}{1 - \tilde \pi}$")
+    plt.ylabel("DCF")
+    plt.legend()
+    plt.show()
+    plt.close()
