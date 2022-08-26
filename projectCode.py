@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from modules.dataTransform import normalize, vrow, vcol, gaussianize, k_folds, PCA
 from modules.dataLoad import load, split_db_2to1
 from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calcLogRegInLambdaRange, calculateSVM, calcSVMInCRange, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, tied_Cov_MVG, plotMinDCFLogReg, logpdf_GMM, GMM_EM, GMM_LBG, calculateGMM
-from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap, bayes_error_plot
+from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap, bayes_error_plot, calculateRoc
 
 def shuffle_data(D,L):
     '''
@@ -24,7 +24,249 @@ def shuffle_data(D,L):
 
 def evaluateModel(DTR, LTR, DTE, LTE, choice):
 
-    if (int(choice) == 15):
+    if (choice == 1):
+        gammas, minDCFArrayKfold = k_fold(DTR, LTR, 5, 11, returnResults=True) # DTR and LTR were used on the kfold as being the whole dataset (validation set)
+
+        resolution = 15
+        minMaxC = [-3, 3]
+        Cs = np.logspace(minMaxC[0], minMaxC[1], resolution)
+
+        finalMinDCFArray = np.zeros((3, resolution))
+
+        DTE = gaussianize(DTE, DTR)
+        DTR = gaussianize(DTR)
+
+        prediction = calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, useRebalancing=True, linear=False, RBF=True, gamma=gammas[0])
+        prediction = np.vstack((prediction, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, useRebalancing=True, linear=False, RBF=True, gamma=gammas[1])))
+        prediction = np.vstack((prediction, calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution, useRebalancing=True, linear=False, RBF=True, gamma=gammas[2])))
+
+        for i in range (resolution):
+            finalMinDCFArray[0][i] = bayes_risk(None, 0.5, True, True, prediction[i, :], prediction[-1, :])
+            finalMinDCFArray[1][i] = bayes_risk(None, 0.5, True, True, prediction[resolution+1+i, :], prediction[-1, :])
+            finalMinDCFArray[2][i] = bayes_risk(None, 0.5, True, True, prediction[2*(resolution+1)+i, :], prediction[-1, :])
+            
+            print("calculation ", i, " out of ", resolution)
+
+        else:
+            plt.figure()
+            plt.plot(Cs, minDCFArrayKfold[0, :], label=r"minDCF [val] ($\gamma = %f$)" %gammas[0], color="r", linestyle = 'dashed')
+            plt.plot(Cs, finalMinDCFArray[0, :], label=r"minDCF [eval] ($\gamma = %f$)" %gammas[0], color="r")
+            plt.plot(Cs, minDCFArrayKfold[1, :], label=r"minDCF [val] ($\gamma = %f$)" %gammas[1], color="b", linestyle = 'dashed')
+            plt.plot(Cs, finalMinDCFArray[1, :], label=r"minDCF [eval] ($\gamma = %f$)" %gammas[1], color="b")
+            plt.plot(Cs, minDCFArrayKfold[2, :], label=r"minDCF [val] ($\gamma = %f$)" %gammas[2], color="g", linestyle = 'dashed')
+            plt.plot(Cs, finalMinDCFArray[2, :], label=r"minDCF [eval] ($\gamma = %f$)" %gammas[2], color="g")
+            plt.xlabel(r"values for C")
+            plt.ylabel("DCF")
+            plt.legend()
+            plt.xscale('log')
+            plt.show()
+            plt.close()
+
+    elif(choice==2):
+
+        xticks, minDCFArrayKfold = k_fold(DTR, LTR, 5, 13.2, returnResults=True)
+        xticks = np.asarray(xticks)
+
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+        components = 512
+
+        iterations = int(np.log2(components)+1)
+
+        finalMinDCFArray = np.zeros((2,iterations))
+        predictions = np.zeros(( (iterations)*2 + 1, 0)) # (each 2 rows is equal to raw features and gaussianized features)
+        xLabels = []
+
+        llrs = np.zeros((0, LTE.shape[0]))
+
+        gaussDTE = gaussianize(DTE, DTR)
+        gaussDTR = gaussianize(DTR)
+            
+        for iterarion in range(iterations): 
+
+            prediction, llr = calculateGMM(DTR, DTE, LTR, alpha, psi, 2**iterarion, stop, 'tiedCovariance')
+            prediction, gaussllr = calculateGMM(gaussDTR, gaussDTE, LTR, alpha, psi, 2**iterarion, stop, 'tiedCovariance')
+
+            llr = np.vstack((llr, gaussllr))
+            llrs = np.vstack((llrs, llr))
+
+            print("Iteration ", iterarion+1, " of ", iterations)
+                
+        llrs = np.vstack((llrs, LTE))
+        predictions = np.hstack((predictions, llrs))
+        
+       
+        for i in range (iterations):
+            finalMinDCFArray[0][i] = bayes_risk(None, 0.5, True, True, predictions[2*i, :], predictions[-1, :]) # Raw features
+            finalMinDCFArray[1][i] = bayes_risk(None, 0.5, True, True, predictions[2*i + 1, :], predictions[-1, :]) #Gaussianized features
+            
+            xLabels.append(2**i)
+
+            print("calculation ", i+1, " out of ", iterations)
+
+        width=0.15
+
+        plt.figure()
+        plt.bar(xticks, minDCFArrayKfold[0, :], width=width, label="Raw features [Val]", align='edge', hatch='//', color='g', edgecolor='black')
+        plt.bar(xticks+width, finalMinDCFArray[0, :], width=width, label="Raw features [Eval]", align='edge', color='g', edgecolor='black')
+        plt.bar(xticks, minDCFArrayKfold[1, :], width=-width, label="Gaussianized features [Val]", align='edge', hatch='//', color='r', edgecolor='black')
+        plt.bar(xticks-width, finalMinDCFArray[1, :], width=-width, label="Gaussianized features [Eval]", align='edge', color='r', edgecolor='black')
+        plt.xticks(ticks=xticks, labels=xLabels)
+        plt.xlabel("GMM components")
+        plt.ylabel("DCF")
+        plt.legend()
+        plt.show()
+        plt.close()
+
+    elif(choice==3):
+        #SVM parameters
+        C = 10**(0)
+        gamma = 10**-1
+
+        # GMM parameters
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+        components = 32
+
+        fusionDcf_list = np.zeros((2, 3))
+        SVMDcf_list = np.zeros((2, 3))
+        GMMDcf_list = np.zeros((2, 3))
+        results = np.zeros((4, 0)) # 4 lines: SVM, GMM, fusion model and +1 fot the LTE
+
+        DTE = gaussianize(DTE, DTR)
+        DTR = gaussianize(DTR)
+
+        # For balanced SVM
+        print("Starting SVM calculation")
+        predictedSVM = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, useRebalancing=True, piT=0.5, RBF=True, linear=False, gamma=gamma)
+        print("Starting GMM calculation")
+        predictedGMM, llr = calculateGMM(DTR, DTE, LTR, alpha, psi, components, stop, 'tiedCovariance') 
+        print("Finished calculations")
+        scores = np.vstack((predictedSVM, llr))
+
+        alphaBetaSVM = calculateLogReg(np.reshape(predictedSVM, (1, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+        piTilCalibration = 0.5
+        predictedSVM = alphaBetaSVM[0]*predictedSVM + alphaBetaSVM[1] - np.log(piTilCalibration/(1-piTilCalibration)) # Calibrated
+
+        alphaBetaGMM = calculateLogReg(np.reshape(llr, (1, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+        piTilCalibration = 0.5
+        llr = alphaBetaGMM[0]*llr + alphaBetaGMM[1] - np.log(piTilCalibration/(1-piTilCalibration)) # Calibrated
+
+        alphaBetaFusion = calculateLogReg(np.reshape(scores, (2, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+        piTilCalibration = 0.5
+        predictedFusion = np.dot(alphaBetaFusion[0:2], scores) + alphaBetaFusion[-1] - np.log(piTilCalibration/(1-piTilCalibration)) # Fusion model
+
+        temp = np.vstack((predictedSVM, llr))
+        temp = np.vstack((temp, predictedFusion))
+        temp = np.vstack((temp, LTE))
+        results = np.hstack((results, temp))
+
+        # Lists for the DCF
+        piTils = [0.5, 0.1, 0.9]
+        thresholds = [-np.log(piTils[0]/(1-piTils[0])), -np.log(piTils[1]/(1-piTils[1])), -np.log(piTils[2]/(1-piTils[2]))]
+
+        # For minimum DCF of Fusion model
+        fusionDcf_list[0][0] = bayes_risk(None, piTils[0], True, True, results[2, :], results[-1, :])
+        fusionDcf_list[0][1] = bayes_risk(None, piTils[1], True, True, results[2, :], results[-1, :])
+        fusionDcf_list[0][2] = bayes_risk(None, piTils[2], True, True, results[2, :], results[-1, :])
+        # For minimum DCF of SVM model
+        SVMDcf_list[0][0] = bayes_risk(None, piTils[0], True, True, results[0, :], results[-1, :])
+        SVMDcf_list[0][1] = bayes_risk(None, piTils[1], True, True, results[0, :], results[-1, :])
+        SVMDcf_list[0][2] = bayes_risk(None, piTils[2], True, True, results[0, :], results[-1, :])
+        # For minimum DCF of GMM model
+        GMMDcf_list[0][0] = bayes_risk(None, piTils[0], True, True, results[1, :], results[-1, :])
+        GMMDcf_list[0][1] = bayes_risk(None, piTils[1], True, True, results[1, :], results[-1, :])
+        GMMDcf_list[0][2] = bayes_risk(None, piTils[2], True, True, results[1, :], results[-1, :])
+
+        # For actual DCF of Fusion model
+        fusionDcf_list[1][0] = bayes_risk(None, piTils[0], True, False, results[2, :], results[-1, :], threshold = thresholds[0])
+        fusionDcf_list[1][1] = bayes_risk(None, piTils[1], True, False, results[2, :], results[-1, :], threshold = thresholds[1])
+        fusionDcf_list[1][2] = bayes_risk(None, piTils[2], True, False, results[2, :], results[-1, :], threshold = thresholds[2])
+        # For actual DCF of SVM model
+        SVMDcf_list[1][0] = bayes_risk(None, piTils[0], True, False, results[0, :], results[-1, :], threshold = thresholds[0])
+        SVMDcf_list[1][1] = bayes_risk(None, piTils[1], True, False, results[0, :], results[-1, :], threshold = thresholds[1])
+        SVMDcf_list[1][2] = bayes_risk(None, piTils[2], True, False, results[0, :], results[-1, :], threshold = thresholds[2])
+        # For actual DCF of GMM model
+        GMMDcf_list[1][0] = bayes_risk(None, piTils[0], True, False, results[1, :], results[-1, :], threshold = thresholds[0])
+        GMMDcf_list[1][1] = bayes_risk(None, piTils[1], True, False, results[1, :], results[-1, :], threshold = thresholds[1])
+        GMMDcf_list[1][2] = bayes_risk(None, piTils[2], True, False, results[1, :], results[-1, :], threshold = thresholds[2])
+
+        print("Min DCF and actual DCF for the SVM, GMM and fusion models with theoretical threshold:")
+        print("Order of piTils = 0.5 | 0.1 | 0.9")
+        print("Min SVM DCF: ", SVMDcf_list[0])
+        print("Act SVM DCF: ", SVMDcf_list[1])
+        print("Min GMM DCF: ", GMMDcf_list[0])
+        print("Act GMM DCF: ", GMMDcf_list[1])
+        print("Min fusion DCF: ", fusionDcf_list[0])
+        print("Act fusion DCF: ", fusionDcf_list[1])
+
+        # Printing the Bayes risk plot and DET curve
+        print("Entered printing phase")
+        labelsForScores = ["SVM", "GMM", "Fusion"]
+        priorRange = (-4,4,100)
+        bayes_error_plot(results[0:3, :], results[-1, :], labelsForScores, priorRange, fusion=True)
+        plotLabels = ["SVM", "GMM", "Fusion"]
+        calculateRoc(1000, results[0:3, :], results[-1, :], plotLabels)
+
+    elif(choice==4): # Min DCF for RBF SVM with both C = 1 and C = 10 and GMM for g = 128 and g = 32
+        C1 = 10**(1)
+        C2 = 10**(0)
+        gamma = 10**-1
+
+        # GMM parameters
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+        components1 = 128
+        components2 = 32
+
+        finalMinDCFArray = np.zeros((2, 3))
+
+        dcf_list5 = np.zeros((4, 1))
+        dcf_list1 = np.zeros((4, 1))
+        dcf_list9 = np.zeros((4, 1))
+
+        DTE = gaussianize(DTE, DTR)
+        DTR = gaussianize(DTR)
+
+        # For balanced SVM
+        predictedSVM = calculateSVM(DTR, LTR, C1, DTE, LTE, returnScores=True, useRebalancing=True, RBF=True, linear=False, gamma=gamma) # C1 = 10**(1)
+        predictedSVM = np.vstack((predictedSVM, calculateSVM(DTR, LTR, C2, DTE, LTE, returnScores=True, useRebalancing=True, RBF=True, linear=False, gamma=gamma))) # C2 = 10**(0)
+
+        predictedGMM, llr1 = calculateGMM(DTR, DTE, LTR, alpha, psi, components1, stop, 'tiedCovariance') # components1 = 128
+        predictedGMM, llr2 = calculateGMM(DTR, DTE, LTR, alpha, psi, components2, stop, 'tiedCovariance') # components2 = 32
+        llr = np.vstack((llr1, llr2))
+
+        temp = np.vstack((predictedSVM, llr))
+        temp = np.vstack((temp, LTE))        
+    
+        dcf_list5[0][0] = bayes_risk(None, 0.5, True, True, temp[0, :], temp[-1, :]) # C1 = 10**(1)
+        dcf_list5[1][0] = bayes_risk(None, 0.5, True, True, temp[1, :], temp[-1, :]) # C2 = 10**(0)
+        dcf_list5[2][0] = bayes_risk(None, 0.5, True, True, temp[2, :], temp[-1, :]) # components1 = 128
+        dcf_list5[3][0] = bayes_risk(None, 0.5, True, True, temp[3, :], temp[-1, :]) # components2 = 32
+
+        dcf_list1[0][0] = bayes_risk(None, 0.1, True, True, temp[0, :], temp[-1, :])
+        dcf_list1[1][0] = bayes_risk(None, 0.1, True, True, temp[1, :], temp[-1, :])
+        dcf_list1[2][0] = bayes_risk(None, 0.1, True, True, temp[2, :], temp[-1, :])
+        dcf_list1[3][0] = bayes_risk(None, 0.1, True, True, temp[3, :], temp[-1, :])
+
+        dcf_list9[0][0] = bayes_risk(None, 0.9, True, True, temp[0, :], temp[-1, :])
+        dcf_list9[1][0] = bayes_risk(None, 0.9, True, True, temp[1, :], temp[-1, :])
+        dcf_list9[2][0] = bayes_risk(None, 0.9, True, True, temp[2, :], temp[-1, :])
+        dcf_list9[3][0] = bayes_risk(None, 0.9, True, True, temp[3, :], temp[-1, :])
+        
+        finalMinDCFArray = np.hstack((dcf_list5, dcf_list1))
+        finalMinDCFArray = np.hstack((finalMinDCFArray, dcf_list9))
+        print("final min DCFs for RBF SVM and GMM for EVALUATION:")
+        print("Order of piTIls : 0.5000000 | 0.1000000 | 0.9000000")
+        print("RBF SVM C = 10^1:", finalMinDCFArray[0])
+        print("RBF SVM C = 10^0:", finalMinDCFArray[1])
+        print("GMM g = 128     :", finalMinDCFArray[2])
+        print("GMM g = 32      :", finalMinDCFArray[3])
+
+    elif (int(choice) == 15):
         #SVM parameters
         C = 10**(1)
         gamma = 10**-1
@@ -78,7 +320,7 @@ def evaluateModel(DTR, LTR, DTE, LTE, choice):
         
     return 0
 
-def k_fold(D, L, k, choice):
+def k_fold(D, L, k, choice, returnResults = False):
     '''
     # Params
     - D = Data matrix (M, N) where M = number of attributes for each sample and N = number of samples
@@ -150,49 +392,6 @@ def k_fold(D, L, k, choice):
         print("Pitil = 0.1: ",tiedMinDCF1)
         print("Pitil = 0.5: ",tiedMinDCF5)
         print("Pitil = 0.9: ",tiedMinDCF9)
-
-    # if(choice==5.1): # Plot minDCF without gaussianization for linear logistic regression
-    #     resolution = 15
-    #     minMaxLambda = [-5, 2]
-    #     piTilArray = [0.5, 0.1, 0.9]
-
-    #     minDCFArray5 = np.zeros((k, resolution))
-    #     minDCFArray1 = np.zeros((k, resolution))
-    #     minDCFArray9 = np.zeros((k, resolution))
-    #     finalMinDCFArray = np.zeros((3, resolution))
-
-    #     for i in range (k):
-    #         # i will indicate the ith test subset
-    #         if (i == k-1): # means that the test set (i) will be the last fold
-    #             DTE = D[:, i*step:]
-    #             LTE = L[i*step:]
-    #             DTR = D[:, 0:i*step]
-    #             LTR = L[0:i*step]
-    #         else:
-    #             DTE = D[:, i*step:(i+1)*step]
-    #             LTE = L[i*step:(i+1)*step]
-    #             DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
-    #             LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
-
-    #         minDCFArray = plotMinDCFLogReg(DTR, LTR, DTE, LTE, 0.5, minMaxLambda, resolution, piTilArray)
-    #         minDCFArray5[i, :] = minDCFArray[0, :]
-    #         minDCFArray1[i, :] = minDCFArray[1, :]
-    #         minDCFArray9[i, :] = minDCFArray[2, :]
-        
-    #     finalMinDCFArray[0, :] =  minDCFArray5.mean(0)
-    #     finalMinDCFArray[1, :] =  minDCFArray1.mean(0)
-    #     finalMinDCFArray[2, :] =  minDCFArray9.mean(0)
-
-    #     lambdas = np.logspace(minMaxLambda[0], minMaxLambda[1], resolution)
-    #     plt.figure()
-    #     for i in range (3): # 3 values of pitil being considered
-    #         plt.plot(lambdas, finalMinDCFArray[i, :], label=r"minDCF ($\tilde \pi$ = %f)" %piTilArray[i])
-    #     plt.xlabel(r"values for $\lambda$")
-    #     plt.ylabel("DCF")
-    #     plt.legend()
-    #     plt.xscale('log')
-    #     plt.show()
-    #     plt.close()
 
     elif(choice==5.1): # Plot minDCF without gaussianization for linear logistic regression
         resolution = 15
@@ -305,29 +504,17 @@ def k_fold(D, L, k, choice):
             predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.5, l, False, False, False, True)
             temp = np.vstack((predicted, LTE))
             resultsForPit5 = np.hstack((resultsForPit5, temp))
-            # dcf_list5LLogReg[0][i] = bayes_risk(None, 0.5, True, True, predicted, LTE)
-            # dcf_list1LLogReg[0][i] = bayes_risk(None, 0.1, True, True, predicted, LTE)
-            # dcf_list9LLogReg[0][i] = bayes_risk(None, 0.9, True, True, predicted, LTE)
 
             predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.1, l, False, False, False, True)
             temp = np.vstack((predicted, LTE))
             resultsForPit1 = np.hstack((resultsForPit1, temp))
-            # dcf_list5LLogReg[1][i] = bayes_risk(None, 0.5, True, True, predicted, LTE)
-            # dcf_list1LLogReg[1][i] = bayes_risk(None, 0.1, True, True, predicted, LTE)
-            # dcf_list9LLogReg[1][i] = bayes_risk(None, 0.9, True, True, predicted, LTE)
 
             predicted = calculateLogReg(DTR, LTR, DTE, LTE, 0.9, l, False, False, False, True)
             temp = np.vstack((predicted, LTE))
             resultsForPit9 = np.hstack((resultsForPit9, temp))
-            # dcf_list5LLogReg[2][i] = bayes_risk(None, 0.5, True, True, predicted, LTE)
-            # dcf_list1LLogReg[2][i] = bayes_risk(None, 0.1, True, True, predicted, LTE)
-            # dcf_list9LLogReg[2][i] = bayes_risk(None, 0.9, True, True, predicted, LTE)
         
             print("Fold number ", i)
 
-        # dcf_list5LLogReg = np.reshape(dcf_list5LLogReg.mean(1), (3,1)) # For piTil = 0.5
-        # dcf_list1LLogReg = np.reshape(dcf_list1LLogReg.mean(1), (3,1)) # For piTil = 0.1
-        # dcf_list9LLogReg = np.reshape(dcf_list9LLogReg.mean(1), (3,1)) # For piTil = 0.9
 
         dcf_list5LLogReg[0][0] = bayes_risk(None, 0.5, True, True, resultsForPit5[0, :], resultsForPit5[1, :])
         dcf_list5LLogReg[1][0] = bayes_risk(None, 0.5, True, True, resultsForPit1[0, :], resultsForPit1[1, :])
@@ -882,18 +1069,21 @@ def k_fold(D, L, k, choice):
             
             print("calculation ", i, " out of ", resolution)
 
-        plt.figure()
-        for i in range (3): # 3 values of pitil being considered
-            plt.plot(Cs, finalMinDCFArray[i, :], label=r"minDCF ($\gamma = %f$)" %gamma[i])
-        plt.xlabel(r"values for C")
-        plt.ylabel("DCF")
-        plt.legend()
-        plt.xscale('log')
-        plt.show()
-        plt.close()
+        if (returnResults):
+            return gamma, finalMinDCFArray
+        else:
+            plt.figure()
+            for i in range (3): # 3 values of pitil being considered
+                plt.plot(Cs, finalMinDCFArray[i, :], label=r"minDCF ($\gamma = %f$)" %gamma[i])
+            plt.xlabel(r"values for C")
+            plt.ylabel("DCF")
+            plt.legend()
+            plt.xscale('log')
+            plt.show()
+            plt.close()
     
     elif(choice==12): # RBF SVM with gaussianization
-        C = 10**(0)
+        C = 10**(1)
         gamma = 10**-1
 
         finalMinDCFArray = np.zeros((2, 3))
@@ -1039,15 +1229,18 @@ def k_fold(D, L, k, choice):
 
         xticks = list(range(1, iterations+1))
 
-        plt.figure()
-        plt.bar(xticks, finalMinDCFArray[0, :], width=0.3, label="Raw features", align='edge')
-        plt.bar(xticks, finalMinDCFArray[1, :], width=-0.3, label="Gaussianized features", align='edge')
-        plt.xticks(ticks=xticks, labels=xLabels)
-        plt.xlabel("GMM components")
-        plt.ylabel("DCF")
-        plt.legend()
-        plt.show()
-        plt.close()
+        if (returnResults):
+            return xticks, finalMinDCFArray
+        else:
+            plt.figure()
+            plt.bar(xticks, finalMinDCFArray[0, :], width=0.3, label="Raw features", align='edge')
+            plt.bar(xticks, finalMinDCFArray[1, :], width=-0.3, label="Gaussianized features", align='edge')
+            plt.xticks(ticks=xticks, labels=xLabels)
+            plt.xlabel("GMM components")
+            plt.ylabel("DCF")
+            plt.legend()
+            plt.show()
+            plt.close()
 
     elif(int(choice)==14): # GMM
         dcf_list5 = np.zeros((4, 1))
@@ -1198,13 +1391,100 @@ def k_fold(D, L, k, choice):
             labelsForScores = ["SVM", "GMM"]
             priorRange = (-4,4,100)
             bayes_error_plot(results[0:2, :], results[-1, :], labelsForScores, priorRange)
+        
+    elif(choice==16): # Fusion model comparison
+
+        #SVM parameters
+        C = 10**(1)
+        gamma = 10**-1
+
+        # GMM parameters
+        alpha = 0.1
+        psi = 0.01
+        stop = 10**-6
+        components = 128
+
+        dcf_list = np.zeros((2, 3))
+        results = np.zeros((4, 0)) # 4 lines: SVM, GMM, fusion model and +1 fot the LTE
+
+        for i in range (k):
+            # i will indicate the ith test subset
+            if (i == k-1): # means that the test set (i) will be the last fold
+                DTE = D[:, i*step:]
+                LTE = L[i*step:]
+                DTR = D[:, 0:i*step]
+                LTR = L[0:i*step]
+            else:
+                DTE = D[:, i*step:(i+1)*step]
+                LTE = L[i*step:(i+1)*step]
+                DTR = np.hstack( (D[:, 0:i*step], D[:, (i+1)*step:]) )
+                LTR = np.hstack( (L[0:i*step], L[(i+1)*step:]) )
+
+            DTE = gaussianize(DTE, DTR)
+            DTR = gaussianize(DTR)
+
+            # For balanced SVM
+            print("Starting SVM calculation")
+            predictedSVM = calculateSVM(DTR, LTR, C, DTE, LTE, returnScores=True, useRebalancing=True, piT=0.5, RBF=True, linear=False, gamma=gamma)
+            print("Starting GMM calculation")
+            predictedGMM, llr = calculateGMM(DTR, DTE, LTR, alpha, psi, components, stop, 'tiedCovariance')
+            print("Finished calculations")
+            scores = np.vstack((predictedSVM, llr))
+
+            alphaBetaSVM = calculateLogReg(np.reshape(predictedSVM, (1, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+            piTilCalibration = 0.5
+            predictedSVM = alphaBetaSVM[0]*predictedSVM + alphaBetaSVM[1] - np.log(piTilCalibration/(1-piTilCalibration)) # Calibrated
+
+            alphaBetaGMM = calculateLogReg(np.reshape(llr, (1, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+            piTilCalibration = 0.5
+            llr = alphaBetaGMM[0]*llr + alphaBetaGMM[1] - np.log(piTilCalibration/(1-piTilCalibration)) # Calibrated
+
+            alphaBetaFusion = calculateLogReg(np.reshape(scores, (2, LTE.shape[0])), LTE, None, None, pit = 0.5, recalibration=True)
+            piTilCalibration = 0.5
+            predictedFusion = np.dot(alphaBetaFusion[0:2], scores) + alphaBetaFusion[-1] - np.log(piTilCalibration/(1-piTilCalibration)) # Fusion model
+
+            temp = np.vstack((predictedSVM, llr))
+            temp = np.vstack((temp, predictedFusion))
+            temp = np.vstack((temp, LTE))
+            results = np.hstack((results, temp))
+
+            print("Fold number ", i, " done...")
+            
+        # Lists for the DCF
+        piTils = [0.5, 0.1, 0.9]
+        thresholds = [-np.log(piTils[0]/(1-piTils[0])), -np.log(piTils[1]/(1-piTils[1])), -np.log(piTils[2]/(1-piTils[2]))]
+
+        # For minimum DCF of Fusion model
+        dcf_list[0][0] = bayes_risk(None, piTils[0], True, True, results[2, :], results[-1, :])
+        dcf_list[0][1] = bayes_risk(None, piTils[1], True, True, results[2, :], results[-1, :])
+        dcf_list[0][2] = bayes_risk(None, piTils[2], True, True, results[2, :], results[-1, :])
+
+        # For actual DCF of Fusion model
+        dcf_list[1][0] = bayes_risk(None, piTils[0], True, False, results[2, :], results[-1, :], threshold = thresholds[0])
+        dcf_list[1][1] = bayes_risk(None, piTils[1], True, False, results[2, :], results[-1, :], threshold = thresholds[1])
+        dcf_list[1][2] = bayes_risk(None, piTils[2], True, False, results[2, :], results[-1, :], threshold = thresholds[2])
+
+        print("Min DCF and actual DCF for the fusion model with theoretical threshold:")
+        print("Order of piTils = 0.5 | 0.1 | 0.9")
+        print("Min DCF: ", dcf_list[0])
+        print("Act DCF: ", dcf_list[1])
+
+        # Printing the Bayes risk plot and DET curve
+        print("Entered printing phase")
+        labelsForScores = ["SVM", "GMM", "Fusion"]
+        priorRange = (-4,4,100)
+        bayes_error_plot(results[0:3, :], results[-1, :], labelsForScores, priorRange, fusion=True)
+        plotLabels = ["SVM", "GMM", "Fusion"]
+        calculateRoc(1000, results[0:3, :], results[-1, :], plotLabels)
+
+
 
 # ================================================= MAIN ====================================================================================
 
 def main():
     attrs, labels = load('./Train.txt')
     testAttrs, testLabels = load('./Test.txt')
-    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n -10 for quad SVM\n -11 for plots for the RBF SVM\n -12 for RBF SVM\n -13 for plots of GMM\n -14 for GMM\n -15 for model selection (comparison between RBF SVM and GMM)\n"))
+    choice = int(input("Type:\n -1 for plotting the raw initial data\n -2 for plotting the gaussianized data\n -3 for the correlation analysis\n -4 for Gaussian models\n -5 for Linear Logistic Regression\n -6 for quad log reg\n -7 for plots for the linear SVM\n -8 for linear SVM\n -9 for plots for the quadratic SVM\n -10 for quad SVM\n -11 for plots for the RBF SVM\n -12 for RBF SVM\n -13 for plots of GMM\n -14 for GMM\n -15 for model selection (comparison between RBF SVM and GMM)\n -16 for Fusion model (DET curve, Bayes curve and DCFs status)\n -17 for using the evaluation data\n"))
     if (choice==1): # Plot original data
         plotInitialData(attrs, labels)
         
@@ -1310,7 +1590,7 @@ def main():
             k_fold(attrs, labels, 5, 14.3)
 
     elif(choice==15): # - Model selection
-        choice2 = int(input("Type:\n -1 for actual DCF of tied-cov GMM and RBF SVM\n -2 for Bayes error plot\n -3 for calibrated GMM and RBF SVM bothactual DCF and plot\n"))
+        choice2 = int(input("Type:\n -1 for actual DCF of tied-cov GMM and RBF SVM\n -2 for Bayes error plot\n -3 for calibrated GMM and RBF SVM both actual DCF and plot and resulting DCFs\n"))
         if(choice2==1): # actual DCF of tied-cov GMM and RBF SVM
             k_fold(attrs, labels, 5, 15.1)
         elif(choice2==2): # Bayes error plots
@@ -1318,8 +1598,19 @@ def main():
         elif(choice2==3):
             k_fold(attrs, labels, 5, 15.3)
 
-
-
+    elif(choice==16): # - Fusion model
+        k_fold(attrs, labels, 5, 16)
+       
+    elif(choice==17): # Using evaluation data
+        choice2 = int(input("Type:\n -1 To compare the plots of RBF SVM for kfold and evaluation set\n -2 To compare the plots of GMM for kfold and evaluation set\n -3 for calculating the min DCF and actual DCF for GMM, SVM and fusion as well as the graphs\n -4 for comparison of RBF SVM with C = 10 and C = 1 and GMM for g = 128 and 32\n"))
+        if(choice2==1): # compare the plots of RBF SVM for kfold and evaluation set
+            evaluateModel(attrs, labels, testAttrs, testLabels, 1)
+        elif(choice2==2): # compare the plots of GMM for kfold and evaluation set
+            evaluateModel(attrs, labels, testAttrs, testLabels, 2)
+        elif(choice2==3): # min DCF and actual DCF for GMM, SVM and fusion as well as the graphs
+            evaluateModel(attrs, labels, testAttrs, testLabels, 3)
+        elif(choice2==4): # Comparison for RBF SVM with C = 10 and C = 1 and GMM for g = 128 and 32
+            evaluateModel(attrs, labels, testAttrs, testLabels, 4)
 
     else:
         print("Invalid number")
