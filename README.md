@@ -37,10 +37,3 @@ We choose to use the k-fold approach since the dataset is considered to be small
 Total amount of samples = 1839. With the algorithm written, each partition will have 1839/5 = 367.8 which is rounded to 367. For the last partition, it will have 371.
 Picked the avg of the minDCF since k-fold allows observing how different values could be obtained with different combination of data. 
 Data was mixed once, randomly, at the beginning of the program to make the partitions more homogeneous. 
-
-## Analisis of data
-
-### Features
-
-The following images are the original shape of the data without any tranformation. The raw features presnt irregular distributions and some of them show outliners, which lead to expect sub-optimal results with Gaussian based methods.
-Processing of the data such as gausseanization are expected to improve the results.
