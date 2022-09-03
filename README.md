@@ -29,6 +29,13 @@ Input variables (based on physicochemical tests):
 Output variable (based on sensory data):
 12 - quality (score between 0 and 10)
 
+## Code info
+
+The main application code is on the file "projectCode.py". It is ready to be ran and it will display a simple menu where the user can choose what to execute.
+The number to be taken as input might have a "sub-menu" where other correlated actions can be performed. Everything reported on the pdf, whether it is an image or just number results, can be ran again using this menu. 
+
+It is important to notice, however, that the results may fluctuate a little bit, since the k-fold approach performs a random shuffle on the dataset that is different everytime it is ran. 
+
 ## More information
 
 For the report and detailed information, please, check the pdf report. 
