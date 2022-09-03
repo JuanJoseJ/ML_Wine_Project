@@ -1,11 +1,10 @@
-from cProfile import label
 from random import gauss
 import numpy as np
 import matplotlib.pyplot as plt
-from modules.dataTransform import normalize, vrow, vcol, gaussianize, k_folds, PCA
-from modules.dataLoad import load, split_db_2to1
-from modules.dataEvaluation import logpdf_GAU_ND, empirical_cov, pearson_correlation_coefficient, calculateLogReg, calcLogRegInLambdaRange, calculateSVM, calcSVMInCRange, confusionMatrix, bayes_risk, calc_likehoods_ratio, calc_mu_cov, comp_cov_matrix, log_MVG_Classifier, tied_Cov_MVG, plotMinDCFLogReg, logpdf_GMM, GMM_EM, GMM_LBG, calculateGMM
-from modules.dataPlot import plotEstimDensityForRow, plotEstimDensityAllRows, plotInitialData, plotCorrelationHeatMap, bayes_error_plot, calculateRoc
+from modules.dataTransform import gaussianize, PCA
+from modules.dataLoad import load
+from modules.dataEvaluation import pearson_correlation_coefficient, calculateLogReg, calcLogRegInLambdaRange, calculateSVM, calcSVMInCRange, bayes_risk, comp_cov_matrix, log_MVG_Classifier, tied_Cov_MVG, calculateGMM
+from modules.dataPlot import plotInitialData, plotCorrelationHeatMap, bayes_error_plot, calculateRoc
 
 def shuffle_data(D,L):
     '''
@@ -1029,8 +1028,6 @@ def k_fold(D, L, k, choice, returnResults = False):
         gamma = [10**-3, 10**-2, 10**-1]
 
         predictions = np.zeros(( (resolution+1)*3, 0))
-        # predictions2 = np.zeros((resolution+1, 0))
-        # predictions3 = np.zeros((resolution+1, 0))
 
         finalMinDCFArray = np.zeros((3, resolution))
 
@@ -1057,10 +1054,6 @@ def k_fold(D, L, k, choice, returnResults = False):
             predictions = np.hstack((predictions, prediction)) # ((resolution+1)*3, labels*5)
 
             print("Fold number ", i, " done...")
-        
-        # for i in range (resolution):
-        #     for j in range (len(piTilArray)):
-        #         finalMinDCFArray[j][i] = bayes_risk(None, piTilArray[j], True, True, predictions[i, :], predictions[-1, :])
 
         for i in range (resolution):
             finalMinDCFArray[0][i] = bayes_risk(None, 0.5, True, True, predictions[i, :], predictions[-1, :])

@@ -107,32 +107,21 @@ def plotCorrelationHeatMap(raw, class1, class2):
         "pH",
         "sulphates",
         "alcohol"]
-    # plt.figure()
     fig, ax = plt.subplots()
     heatmap = ax.imshow(raw, vmin=-1, vmax=1, cmap='inferno')
     fig.colorbar(heatmap)
-    # ax.set_xticks(np.arange(len(attrList)), labels=attrList)
-    # ax.set_yticks(np.arange(len(attrList)), labels=attrList)
-    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
     plt.xlabel("Raw Data")
 
     fig1, ax1 = plt.subplots()
     heatmap1 = ax1.imshow(class1, vmin=-1, vmax=1, cmap='RdBu')
     fig1.colorbar(heatmap1)
-    # ax.set_xticks(np.arange(len(attrList)), labels=attrList)
-    # ax.set_yticks(np.arange(len(attrList)), labels=attrList)
-    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
     plt.xlabel("Class One")
 
     fig2, ax2 = plt.subplots()
     heatmap2 = ax2.imshow(class2, vmin=-1, vmax=1, cmap='YlGn')
     fig2.colorbar(heatmap2)
-    # ax.set_xticks(np.arange(len(attrList)), labels=attrList)
-    # ax.set_yticks(np.arange(len(attrList)), labels=attrList)
-    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",rotation_mode="anchor")
     plt.xlabel("Class Two")
 
-    # plt.imshow(matrix, cmap='hot', interpolation='nearest')
     plt.show()
     return
 
@@ -243,7 +232,6 @@ def bayes_error_plot(scores, LTE, labelsForScores, pRange = (-3, 3, 21), fusion 
             piTil = 1/( 1 + np.exp(-p) )
 
             # Calculating the prediction for pi and its confusion matrix:
-            # confMatrix = confusion_matrix(prediction, LTE)
 
             # Retrieving normalized DCF:
             DCF = bayes_risk(None, piTil, True, False, scores[0], LTE, threshold = -p)
@@ -283,7 +271,6 @@ def bayes_error_plot(scores, LTE, labelsForScores, pRange = (-3, 3, 21), fusion 
             piTil = 1/( 1 + np.exp(-p) )
 
             # Calculating the prediction for pi and its confusion matrix:
-            # confMatrix = confusion_matrix(prediction, LTE)
 
             # Retrieving normalized DCF:
             DCF = bayes_risk(None, piTil, True, False, scores[0], LTE, threshold = -p)

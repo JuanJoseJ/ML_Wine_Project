@@ -1,6 +1,3 @@
-from audioop import minmax
-from math import sqrt
-from unittest import result
 import numpy as np
 from scipy import stats
 import scipy.special as sp
@@ -8,7 +5,8 @@ from modules.dataTransform import vrow, vcol, mcol
 import scipy.optimize
 import matplotlib.pyplot as plt
 '''
-This file contains all the function related to extracting characteristics from a set of data and also the models.
+This file contains all the function related to extracting characteristics from a set of data and also the models. 
+To execute the main code, please, go to "projectCode.py".
 '''
 
 #================================================ DENSITY FUNCTIONS =======================================
@@ -18,7 +16,6 @@ def logpdf_GAU_ND(D, mu, C):
     Calculates the log-densities of data matrix "D".\n
     D = data matrix (MxN == attributes x samples), mu = (Mx1) containing the mean for each attribute, C = (MxM) covariance matrix. \n
     '''
-    #print("Shape of D: ", D.shape, " Shape of mu: ", mu, " Shape of C: ", C)
     M = D.shape[0]
     T1 = -(M/2)*np.log(2*np.pi)
     T2 = -(1/2)*np.linalg.slogdet(C)[1]
@@ -35,7 +32,6 @@ def empirical_cov(data, printMode = False):
     '''
         Function to get the empirical covariance from a set of data
     '''
-    # Cov function = (1/N)*(x-mu)*(x-mu)^T
     mu = data.mean(1)
     mu = mu.reshape((mu.shape[0], 1))
     Dc = data - mu
@@ -45,7 +41,6 @@ def empirical_cov(data, printMode = False):
     if(printMode):
         print("Covariance max: ", np.max(cov))
         print("Covariance min: ", np.min(cov))
-        # print("np.Covariance: ", np.cov(data))
     return cov, mu
 
 def pearson_correlation_coefficient(attrs, labels):
@@ -134,8 +129,6 @@ def comp_cov_matrix(attrs, labels, printMode=False):
         print("Difference between covariances:")
         print(abs(cov0-cov1))
     return result
-
-# ============================== Full-Cov Gaussean Classifier =================================================
 
 # ==================================================================================================
 def log_MVG_Classifier(DTR, LTR, DTE, prior = [1/2, 1/2]):
@@ -307,65 +300,6 @@ def logreg_obj(v, DTR, LTR, l, pit):
     temp2 += (1-pit)/nf*np.sum(np.logaddexp(0, class0*np.multiply(-Z, np.dot(np.transpose(w),DTR) + b)))
     return temp + temp2
 
-# def quadlogreg_obj(v, DTR, LTR, l, pit):
-#     '''
-#     ## Explanation
-#     This function calculates the function of quadratic logistic regression to minimize.
-#     In this project, considering that the classes are unbalanced, the function receives also pi and nt, nf (number of classes = 1, number of classes = 0)
-#     ## Params:
-
-#     - v = numpy array "(D^2 + D + 1,) = (w,b,c)" where D = dimensionality of attributes (e.g, D=4 for Iris) and the second last column is b (size D) and last column is the c (biases).\n
-#     - DTR = Training data (M,N).\n
-#     - LTR = Training labels (N,).\n
-#     - l = lambda (Multiplier of w).\n
-#     - pit = Probability of class being 1 (used for unbalanced approaches). If it is 0.5, it is the standard balanced approach.
-#     '''
-#     # Retrieving n (number of samples) and nt (number of samples of class 1)
-#     n = DTR.shape[1]
-#     nt = np.sum(LTR, 0)
-#     nf = n - nt
-
-#     # Retrieving number of attributes
-#     m = DTR.shape[0]
-
-#     # Retrieving the weights and biases
-#     w = v[0:-1]
-#     c = v[-1]
-
-#     # Calculating phi(x) = (vec(x*x.T), x)
-
-#     temp = l/2*np.linalg.norm(w)**2
-#     temp0 = 0
-#     temp1 = 0
-
-#     PHI = []
-#     PHI = np.asarray(PHI)
-
-#     for i in range (n):
-#         z = 2*LTR[i] - 1 # Which means: z == 1 if class == 1, z == -1 otherwise
-
-#         attr = np.reshape(DTR[:,i], (DTR[:,i].shape[0], 1))
-#         phi = np.dot(attr, attr.T)
-#         phi = np.hstack(phi.T)
-#         phi = np.append(phi, attr)   
-
-#         # PHI = np.append(PHI, phi)
-
-#         if (LTR[i] == 0):
-#             temp0 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
-#         else:
-#             temp1 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
-
-#     # PHI = np.reshape(PHI, (n, m*m + m)).T
-
-#     # Z = np.where(LTR > 0, 1, -1)
-#     # class1 = np.where(LTR > 0, 1, 0)
-#     # class0 = np.where(LTR > 0, 0, 1)
-#     # temp2 = pit/nt*np.sum(np.logaddexp(0, class1*np.multiply(-Z, np.dot(np.transpose(w),PHI) + c)))
-#     # temp2 += (1-pit)/nf*np.sum(np.logaddexp(0, class0*np.multiply(-Z, np.dot(np.transpose(w),PHI) + c)))
-#     return temp + ((1-pit)/nf)*temp0 + (pit/nt)*temp1
-
-#     return temp + temp2
 
 def quadlogreg_obj(v, DTR, LTR, l, pit, PHI):
     '''
@@ -397,26 +331,6 @@ def quadlogreg_obj(v, DTR, LTR, l, pit, PHI):
     temp = l/2*np.linalg.norm(w)**2
     temp0 = 0
     temp1 = 0
-    
-    # PHI = []
-    # PHI = np.asarray(PHI)
-
-    # for i in range (n):
-    #     z = 2*LTR[i] - 1 # Which means: z == 1 if class == 1, z == -1 otherwise
-
-    #     attr = np.reshape(DTR[:,i], (DTR[:,i].shape[0], 1))
-    #     phi = np.dot(attr, attr.T)
-    #     phi = np.hstack(phi.T)
-    #     phi = np.append(phi, attr)
-
-    #     # PHI = np.append(PHI, phi)
-
-    #     if (LTR[i] == 0):
-    #         temp0 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
-    #     else:
-    #         temp1 += np.logaddexp( 0, -z*(np.dot(np.transpose(w),phi) + c) )
-
-    # PHI = np.reshape(PHI, (n, m*m + m)).T
 
     Z = np.where(LTR > 0, 1, -1)
     class1 = np.where(LTR > 0, 1, 0)
@@ -446,20 +360,6 @@ def posteriorLikelihood(v, DTE, printStats = False, LTE = None, quadratic = Fals
     n = DTE.shape[1]
 
     if(quadratic):
-        # c = v[-1]
-        # predicted = np.zeros((n,))
-        # for i in range (n):
-        #     attr = np.reshape(DTE[:,i], (DTE[:,i].shape[0], 1))
-        #     phi = np.dot(attr, attr.T)
-        #     phi = np.hstack(phi.T)
-        #     phi = np.append(phi, attr)
-
-        #     temp = np.dot(np.transpose(w), phi) + c
-
-        #     if (temp > 0):
-        #         predicted[i] = 1
-        #     else:
-        #         predicted[i] = 0
         c = v[-1]
         predicted = np.dot(np.transpose(w), PHI) + c # Equivalent to likelihood
         if(returnScores == False):
@@ -633,9 +533,7 @@ def calcLogRegInLambdaRange(DTR, LTR, DTE, LTE, pit, minMaxLambda, resolution, v
     '''
     lambdas = np.logspace(minMaxLambda[0], minMaxLambda[1], resolution)
     predictions = np.zeros((resolution, LTE.shape[0]))
-    # print("Lambdas = ", lambdas)
-    # minDCF = np.zeros((len(piTilArray), resolution))
-
+   
     maxIt = resolution
     currentIt = 0
     print("number of iterations to take: ", maxIt)
@@ -664,8 +562,7 @@ def calcSVMInCRange(DTR, LTR, DTE, LTE, minMaxC, resolution,  K = 1, verbose = F
     '''
     Cs = np.logspace(minMaxC[0], minMaxC[1], resolution)
     predictions = np.zeros((resolution, LTE.shape[0]))
-    # print("Lambdas = ", lambdas)
-    # minDCF = np.zeros((len(piTilArray), resolution))
+   
 
     maxIt = resolution
     currentIt = 0
@@ -1030,8 +927,6 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = 
 
     scores = scores.astype(float)
     scoresEval = scores
-    # scoresEval = np.insert(scores, 0, -np.inf)
-    # scoresEval = np.insert(scores, len(scores), np.inf)
 
     if (minimum and normalized): # This is the minimum that the system can achieve given piTil
 
@@ -1059,34 +954,6 @@ def bayes_risk(confMatrix, piTil, normalized = False, minimum = False, scores = 
         
         return np.min(DCFValues)
 
-    # elif(minimum and normalized == False):
-
-    #     DCFValues = []
-    #     maxThresh = np.max(llr)
-    #     minThresh = np.min(llr)
-
-    #     for t in range (1, threshDivision, 1):
-
-    #         thresh = t*( (maxThresh-minThresh)/threshDivision )
-    #         thresh += minThresh
-    #         predicted = np.where(llr > thresh, 1, 0)
-    #         confMatrix = confusionMatrix(predicted, labels)
-
-    #         # Retrieve number of false negatives and false positives
-    #         FN = confMatrix[0][1]
-    #         FP = confMatrix[1][0]
-
-    #         # Retrieving the true positive and true negative values:
-    #         TP = confMatrix[1][1]
-    #         TN = confMatrix[0][0]
-
-    #         FNR = FN/(FN + TP)
-    #         FPR = FP/(FP + TN)
-
-    #         DCF = piTil*Cfn*FNR + (1-piTil)*Cfp*FPR
-    #         DCFValues.append(DCF)
-        
-    #     return np.min(DCFValues)
     
     elif(normalized):
 

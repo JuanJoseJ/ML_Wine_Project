@@ -104,30 +104,6 @@ def gaussianize(attr, otherComparator = None, printStatus = False):
 
     print("Finished Gaussianization")    
     return gaussianized
-    
-def k_folds(data, labels, k=10):
-    '''
-    ### Explanation
-    Returns the k folds of mixed data and labels that can be used for cross validation
-    ### Params
-    - All the attributes of the data set
-    - All the labels of the data set (Corresponding to the attributes)
-    - The number of folds to use (Default is 10)
-    ### Return
-    The tuple of data and labels
-    '''
-    # Mix the data
-    temp_data = np.vstack([data, labels])
-    temp_data = np.transpose(temp_data)
-    np.random.shuffle(temp_data)
-    temp_data = np.transpose(temp_data)
-    # Separate data and labels again
-    temp_labels = temp_data[-1,:]
-    temp_data = np.delete(temp_data, -1, 0)
-    # Create the folds
-    folds_data = np.split(temp_data, k, axis=1)
-    folds_labels = np.split(temp_labels, k)
-    return folds_data, folds_labels
 
 def PCA(D, m, verif = False):
     '''
